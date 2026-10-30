@@ -1,5 +1,17 @@
 # Setup Guide
 
+## Cách nhanh (khuyến nghị)
+
+Nếu đã cài Homebrew:
+
+```bash
+brew install xcodegen
+xcodegen generate
+open Rooted.xcodeproj
+```
+
+Project Xcode được sinh từ `project.yml`. Các bước dưới đây dành cho trường hợp muốn tạo project thủ công.
+
 ## Bước 1: Tạo Xcode project
 
 1. **File > New > Project**

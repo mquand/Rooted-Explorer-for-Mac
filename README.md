@@ -58,18 +58,38 @@ Rooted/
 
 ## Bắt đầu
 
-Repo hiện chỉ chứa mã nguồn, chưa có file `.xcodeproj`. Xem [SETUP.md](SETUP.md) để tạo project Xcode, thêm source files và cấu hình quyền.
+Cần macOS 13.0+ và Xcode 15.0+.
 
 ```bash
 git clone <repo-url> Rooted
 cd Rooted
+brew install xcodegen
+xcodegen generate
+open Rooted.xcodeproj
 ```
 
-Sau khi tạo project:
+File `.xcodeproj` được sinh từ `project.yml` nên không commit vào repo. Nếu không dùng XcodeGen, xem hướng dẫn tạo project thủ công trong [SETUP.md](SETUP.md).
+
+Build từ command line:
 
 ```bash
 xcodebuild -project Rooted.xcodeproj -scheme Rooted -configuration Debug build
 ```
+
+## Build & Release
+
+[![Build & Release](https://github.com/mquand/Rooted-Explorer-for-Mac/actions/workflows/build.yml/badge.svg)](https://github.com/mquand/Rooted-Explorer-for-Mac/actions/workflows/build.yml)
+
+Mỗi lần push hoặc mở pull request, GitHub Actions sẽ build app trên macOS runner và upload `.zip`/`.dmg` vào tab **Actions**.
+
+Để tạo release, push một tag:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Workflow sẽ build, đóng gói và tạo GitHub Release kèm `.zip` + `.dmg`. Bản build dùng ad-hoc signing, chưa notarize, nên sau khi tải về cần chuột phải → **Open** hoặc chạy `xattr -dr com.apple.quarantine Rooted.app`.
 
 ## Quyền và phân phối
 
