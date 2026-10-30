@@ -48,13 +48,13 @@ jobs:
 
       - name: Package
         run: |
-          mkdir -p dist/dmg
+          mkdir -p dist build/dmg
           ditto -c -k --keepParent build/Build/Products/Release/Rooted.app "dist/Rooted-${GITHUB_REF_NAME}.zip"
-          cp -R build/Build/Products/Release/Rooted.app dist/dmg/
-          ln -s /Applications dist/dmg/Applications
+          cp -R build/Build/Products/Release/Rooted.app build/dmg/
+          ln -s /Applications build/dmg/Applications
           hdiutil create \
             -volname "Rooted" \
-            -srcfolder dist/dmg \
+            -srcfolder build/dmg \
             -ov -format UDZO \
             "dist/Rooted-${GITHUB_REF_NAME}.dmg"
 
@@ -62,7 +62,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Rooted-${{ github.run_number }}
-          path: dist/*
+          path: |
+            dist/*.zip
+            dist/*.dmg
           if-no-files-found: error
 
       - name: Create GitHub Release
@@ -71,9 +73,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release upload "${GITHUB_REF_NAME}" dist/* --clobber
+            gh release upload "${GITHUB_REF_NAME}" dist/*.zip dist/*.dmg --clobber
           else
-            gh release create "${GITHUB_REF_NAME}" dist/* \
+            gh release create "${GITHUB_REF_NAME}" dist/*.zip dist/*.dmg \
               --title "Rooted ${GITHUB_REF_NAME}" \
               --generate-notes \
               --latest
