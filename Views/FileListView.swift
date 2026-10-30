@@ -132,7 +132,6 @@ struct FileListView: View {
             .width(min: 120, max: 150)
         }
         .tableStyle(.inset(alternatesRowBackgrounds: true))
-        .tableColumnHeaders(.hidden)
     }
 
     /// Cho phép double-click vào bất kỳ ô nào để mở file/thư mục.
