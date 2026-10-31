@@ -1,164 +1,122 @@
-# Rooted
+# Rooted 🌲
 
-File manager mã nguồn mở cho macOS, viết bằng SwiftUI. Hiển thị cả những file mà Finder ẩn và bổ sung các thao tác cần thiết cho lập trình viên.
+[![Build & Release](https://github.com/mquand/Rooted-Explorer-for-Mac/actions/workflows/build.yml/badge.svg)](https://github.com/mquand/Rooted-Explorer-for-Mac/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/mquand/Rooted-Explorer-for-Mac?color=blue)](https://github.com/mquand/Rooted-Explorer-for-Mac/releases/latest)
+[![macOS](https://img.shields.io/badge/macOS-13.0+-brightgreen.svg)](https://apple.com/macos)
+[![Swift](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## Tính năng
+File Manager mã nguồn mở, hiện đại và siêu tốc dành cho macOS, viết hoàn toàn bằng SwiftUI & AppKit native. Hiển thị toàn bộ tệp ẩn và tích hợp các tiện ích chuyên sâu cho lập trình viên.
 
-### Đã có
+---
 
-- **Sidebar dạng cây:** Favorites (Home, Desktop, Documents, Downloads), volumes + dung lượng trống, cây thư mục load lười (chỉ đọc thư mục con khi mở rộng).
-- **Ba chế độ xem:** List (bảng), Icons (grid có thumbnail), Gallery (preview lớn + filmstrip).
-- **Thumbnail:** ảnh, PDF, video, audio và icon hệ thống cho mọi file.
-- **Điều hướng:** back/forward, lên thư mục cha, về Home; thanh đường dẫn dạng breadcrumb (mỗi cấp bấm được), bấm nút bút chì hoặc `⇧⌘G` để gõ đường dẫn trực tiếp.
-- **Sắp xếp kiểu Explorer:** bấm tiêu đề cột để sắp xếp (Name/Size/Kind/Modified), bấm lần nữa để đảo chiều; thư mục luôn đứng trước file.
-- **Hành vi click:** mặc định click để chọn, double-click để mở thư mục/file; có thể bật *Open folders with a single click* trong Settings.
-- **Copy / Cut / Paste:** dùng clipboard chuẩn của Finder (`⌘C`, `⌘X`, `⌘V`), tự đổi tên khi trùng (`file copy.ext`).
-- **Thao tác file:** double-click mở, context menu, Rename, Duplicate, Move to Trash, New Folder, Reveal in Finder, Open in Terminal, Open in IDE.
-- **Tags (Finder):** menu **Tags** trong context menu để gắn/bỏ 7 tag màu, chấm màu hiển thị cạnh tên file, mục **Tags** trong sidebar để tìm tất cả file gắn tag đó. Đúng định dạng metadata của Finder (`_kMDItemUserTags`) nên Finder thấy tag ngay.
-- **Quick Look:** bấm `Space` để xem trước file đang chọn (hỗ trợ nhiều file), `Space`/`Escape` để đóng.
-- **Tìm kiếm:** ô tìm kiếm trên toolbar (`⌘F`) — tìm theo tên (Spotlight `mdfind`, fallback `find`) hoặc theo nội dung (ripgrep/grep), đổi phạm vi bằng menu bên cạnh ô tìm kiếm.
-- **Tính dung lượng thư mục:** bấm *Calculate Size* trong context menu khi cần; app không tự quét toàn bộ thư mục nên không bị lag.
-- **Git:** hiển thị branch hiện tại và badge trạng thái từng file (modified, untracked, staged, conflict).
-- **Mở terminal/IDE:** Terminal, iTerm2, Warp, Ghostty; VS Code, Cursor, Xcode, WebStorm, IntelliJ.
-- **Phân tích dung lượng:** nút *Analyze Storage* trên toolbar (hoặc từ menu chuột phải) mở sheet thống kê tổng dung lượng, thư mục con lớn nhất và quét rác dev (`node_modules`, `.venv`, DerivedData…); tính cả file ẩn.
-- **Status bar:** số mục, số mục đang chọn + tổng dung lượng, dung lượng trống của volume, branch git hiện tại.
-- **Tự động cập nhật:** kiểm tra GitHub Releases khi khởi động, tải và thay thế app khi chạy từ `/Applications`.
+## ✨ Tính năng nổi bật
 
-### Đang phát triển
+### 🖥 Giao diện & Chế độ xem
+- **3 Chế độ hiển thị linh hoạt:** List (bảng chi tiết), Icons (lưới thumbnail sắc nét), Gallery (xem trước khổ lớn + dải filmstrip).
+- **Sidebar dạng cây thông minh:** Truy cập nhanh Favorites, phân vùng ổ đĩa và cây thư mục nạp lười (*lazy loading* con chỉ khi mở rộng).
+- **Thanh đường dẫn Breadcrumb:** Bấm vào từng cấp thư mục để điều hướng nhanh, hoặc nhấn `⇧⌘G` để gõ trực tiếp đường dẫn (*Go to Folder*).
+- **Sắp xếp kiểu Explorer:** Nhấp vào tiêu đề cột (`Name`, `Size`, `Kind`, `Modified`) để sắp xếp / đảo chiều; thư mục luôn ưu tiên đứng trước tệp.
+- **Thanh trạng thái trực quan:** Theo dõi số lượng item, số mục đang chọn, tổng dung lượng, dung lượng trống của ổ cứng và Git branch hiện tại.
 
-- Tab, dual-pane, kéo thả giữa các pane.
-- Undo/redo.
-- Command palette (`⌘K`), chmod/chown GUI.
-- File watcher (FSEvents), terminal nhúng, treemap dung lượng, workspaces.
+### ⚡️ Thao tác tệp chuyên nghiệp
+- **Quick Look (`Space`):** Xem trước nội dung tệp tức thì bằng `QLPreviewPanel` chuẩn macOS (hỗ trợ nhiều tệp cùng lúc).
+- **Finder Tags 7 màu:** Đọc và gắn tag màu chuẩn Finder qua thuộc tính mở rộng metadata (`xattr`), đồng bộ 100% với macOS Finder.
+- **Clipboard & Thao tác an toàn:** Hỗ trợ chuẩn Copy / Cut / Paste (`⌘C`, `⌘X`, `⌘V`), tự động đổi tên khi trùng, bảo vệ chống lỗi khi di chuyển vào Trash hoặc đổi tên.
+- **Điều hướng phím tắt nhanh:** Hỗ trợ *Type-to-select* (gõ chữ để nhảy tới tệp) và phím mũi tên trong chế độ Icons / Gallery.
 
-## Phím tắt
+### 🛠 Dành riêng cho Lập trình viên
+- **Tích hợp Git trạng thái thực:** Hiển thị branch hiện tại và badge trực quan cho từng tệp (`M` Modified, `?` Untracked, `A` Staged, `!` Conflict).
+- **Mở nhanh Terminal & IDE:** Khởi chạy tức thì thư mục hiện tại trong Terminal (iTerm2, Warp, Ghostty...) hoặc IDE (VS Code, Cursor, Xcode, WebStorm...).
+- **Phân tích dung lượng & Dọn rác Dev:** Quét dung lượng phân vùng, phát hiện các thư mục nặng và dọn dẹp các thư mục rác phổ biến (`node_modules`, `.venv`, `DerivedData`, cache...).
 
-| Phím | Chức năng |
-|---|---|
-| `⌘C` / `⌘X` / `⌘V` | Copy / Cut / Paste file |
-| `⌘A` | Chọn tất cả |
-| `⌘⌫` | Chuyển vào Trash |
-| `⌘[` / `⌘]` | Back / Forward |
-| `⌘↑` | Lên thư mục cha |
-| `⇧⌘H` | Về Home |
-| `⇧⌘G` | Gõ đường dẫn (Go to Folder) |
-| `⌘F` | Tìm kiếm trong thư mục hiện tại |
-| `⌘R` | Refresh |
-| `Space` | Quick Look (xem trước) |
-| `Enter` | Mở item đang chọn |
-| Phím mũi tên | Di chuyển lựa chọn (Icons/Gallery) |
-| Gõ chữ/số | Nhảy tới file bắt đầu bằng chữ đang gõ |
-| `Escape` | Thoát tìm kiếm / đóng Quick Look |
-| `⌘1` / `⌘2` / `⌘3` | List / Icons / Gallery |
-| `⇧⌘N` | Tạo thư mục mới |
-| `⌘,` | Settings |
+---
 
-## Yêu cầu
+## ⌨️ Phím tắt tiện dụng
 
+| Thao tác | Phím tắt | Thao tác | Phím tắt |
+|---|---|---|---|
+| **Xem trước (Quick Look)** | `Space` / `Esc` | **Sao chép / Cắt / Dán** | `⌘C` / `⌘X` / `⌘V` |
+| **Tìm kiếm (Search)** | `⌘F` | **Chuyển vào Thùng rác** | `⌘⌫` |
+| **Đến thư mục (Go to Folder)** | `⇧⌘G` | **Chọn tất cả** | `⌘A` |
+| **Lên thư mục cha** | `⌘↑` | **Tạo thư mục mới** | `⇧⌘N` |
+| **Back / Forward** | `⌘[` / `⌘]` | **Làm mới danh sách** | `⌘R` |
+| **Về thư mục Home** | `⇧⌘H` | **Cài đặt (Settings)** | `⌘,` |
+| **Đổi chế độ xem** | `⌘1` (List) / `⌘2` (Icons) / `⌘3` (Gallery) | **Mở tệp/thư mục** | `Enter` / Double Click |
+
+---
+
+## 🚀 Cài đặt & Bắt đầu
+
+### Tải ứng dụng (Đã đóng gói)
+Tải bản `.dmg` hoặc `.zip` mới nhất từ [GitHub Releases](https://github.com/mquand/Rooted-Explorer-for-Mac/releases/latest).
+
+> [!NOTE]
+> Do ứng dụng sử dụng ad-hoc signing (chưa đăng ký chứng chỉ trả phí Apple Developer), trong lần mở đầu tiên:
+> - Chuột phải vào ứng dụng trong Applications → Chọn **Open**.
+> - Hoặc chạy lệnh sau trong Terminal:
+>   ```bash
+>   xattr -dr com.apple.quarantine /Applications/Rooted.app
+>   ```
+
+> [!IMPORTANT]
+> **Cấp quyền Full Disk Access:**  
+> Vào **System Settings** → **Privacy & Security** → **Full Disk Access** và bật **Rooted** để ứng dụng có quyền đọc các thư mục hệ thống, Desktop, Downloads và Documents.
+
+---
+
+### Biên dịch từ mã nguồn (Developers)
+
+**Yêu cầu môi trường:**
 - macOS 13.0+
 - Xcode 16.0+
-- Swift 6.0+ (Full Swift 6 Concurrency support)
-
-## Cấu trúc dự án
-
-```
-Rooted/
-├── App/
-│   └── RootedApp.swift           # SwiftUI App entry point
-├── Views/
-│   ├── ContentView.swift         # NavigationSplitView (sidebar + main)
-│   ├── SidebarView.swift         # Sidebar: favorites, tags, volumes, cây thư mục
-│   ├── FileListView.swift        # Toolbar, bảng sort-by-header, icons, gallery, status bar
-│   ├── PathBar.swift             # Thanh đường dẫn breadcrumb + ô gõ path
-│   ├── SearchResultsView.swift   # Bảng kết quả tìm kiếm
-│   ├── StorageAnalysisSheet.swift # Sheet phân tích dung lượng + rác dev
-│   ├── FileItemActions.swift     # Context menu (mở, tag, IDE, thao tác file)
-│   ├── SettingsView.swift        # Settings (General / Updates / About)
-│   └── UpdateBanner.swift        # Banner báo bản cập nhật
-├── ViewModels/
-│   ├── FileListViewModel.swift   # State file list, navigation, clipboard
-│   └── SidebarViewModel.swift    # Cây thư mục load lười
-├── Models/
-│   ├── FileItem.swift            # File data model (kèm tag Finder)
-│   ├── FinderTag.swift           # Tag màu Finder (7 tag chuẩn)
-│   └── AppSettings.swift         # Cài đặt lưu trong UserDefaults
-├── Services/
-│   ├── GitService.swift          # Git status/branch (1 tiến trình, có cache)
-│   ├── TerminalService.swift     # Mở terminal/IDE
-│   ├── SearchService.swift       # Tìm theo tên / tag / nội dung (async)
-│   ├── DiskUsageService.swift    # Dung lượng thư mục, dev junk (hủy được)
-│   ├── TagService.swift          # Đọc/ghi tag Finder qua xattr
-│   ├── QuickLookController.swift # Quick Look (Space) qua QLPreviewPanel
-│   ├── FilePasteboard.swift      # Copy/cut/paste file
-│   ├── ThumbnailService.swift    # QuickLook thumbnail + cache
-│   └── UpdateService.swift       # GitHub Releases updater
-├── Resources/
-│   └── Assets.xcassets/          # AppIcon
-├── Tools/
-│   ├── icon-source.png           # Logo gốc (nền trong suốt)
-│   └── makeicon.py               # Sinh AppIcon.appiconset từ logo
-└── Utils/
-    └── Extensions.swift          # View extensions (double-click, if)
-```
-
-## Bắt đầu
-
-Cần macOS 13.0+ và Xcode 15.0+.
+- Swift 6.0+
 
 ```bash
-git clone <repo-url> Rooted
+# 1. Clone repository
+git clone https://github.com/mquand/Rooted-Explorer-for-Mac.git Rooted
 cd Rooted
+
+# 2. Cài đặt XcodeGen và tạo Xcode project
 brew install xcodegen
 xcodegen generate
+
+# 3. Mở và biên dịch dự án
 open Rooted.xcodeproj
 ```
 
-File `.xcodeproj` được sinh từ `project.yml` nên không commit vào repo. Nếu không dùng XcodeGen, xem hướng dẫn tạo project thủ công trong [SETUP.md](SETUP.md).
+---
 
-Icon app được sinh từ `Tools/icon-source.png` (nền trong suốt):
+## 🏗 Cấu trúc kiến trúc
 
-```bash
-python3 Tools/makeicon.py
+Dự án áp dụng kiến trúc **MVVM (Model-View-ViewModel)** kết hợp nguyên tắc Swift 6 Strict Concurrency an toàn luồng:
+
+```
+Rooted/
+├── App/           # Điểm khởi chạy ứng dụng SwiftUI (RootedApp)
+├── Models/        # Dữ liệu đối tượng: FileItem, FinderTag, AppSettings
+├── ViewModels/    # Quản lý trạng thái logic: FileListViewModel, SidebarViewModel
+├── Views/         # Giao diện người dùng: FileListView, SidebarView, PathBar, Sheets...
+├── Services/      # Tầng dịch vụ nền: GitService, QuickLook, Search, Thumbnails...
+├── Resources/     # Tài nguyên hình ảnh, biểu tượng (Assets.xcassets)
+├── Tools/         # Công cụ bổ trợ: makeicon.py (tạo icon từ ảnh gốc)
+└── Utils/         # Các tiện ích mở rộng SwiftUI & AppKit
 ```
 
-Build từ command line:
+---
+
+## 📦 Phát hành (Release Workflow)
+
+Dự án sử dụng GitHub Actions tự động hóa hoàn toàn quy trình đóng gói. Để tạo bản phát hành mới:
 
 ```bash
-xcodebuild -project Rooted.xcodeproj -scheme Rooted -configuration Debug build
+git tag v0.3.1
+git push origin v0.3.1
 ```
+Workflow sẽ tự động biên dịch universal binary (`arm64` & `x86_64`), ký ad-hoc, tạo file `.dmg` / `.zip` và đăng tải lên GitHub Releases.
 
-## Build & Release
+---
 
-[![Build & Release](https://github.com/mquand/Rooted-Explorer-for-Mac/actions/workflows/build.yml/badge.svg)](https://github.com/mquand/Rooted-Explorer-for-Mac/actions/workflows/build.yml)
+## 📄 Giấy phép
 
-Mỗi lần push hoặc mở pull request, GitHub Actions sẽ build app trên macOS runner và upload `.zip`/`.dmg` vào tab **Actions**.
-
-Để tạo release, push một tag:
-
-```bash
-git tag v0.3.0
-git push origin v0.3.0
-```
-
-Workflow sẽ build, đóng gói và tạo GitHub Release kèm `.zip` + `.dmg`. Bản build dùng **ad-hoc signing**, chưa notarize, nên sau khi tải về cần chuột phải → **Open** hoặc chạy `xattr -dr com.apple.quarantine /Applications/Rooted.app`.
-
-App tự kiểm tra bản mới qua GitHub Releases API khi khởi động (có thể tắt trong **Settings → Updates**). Nếu app đang nằm trong `/Applications` hoặc `~/Applications`, bấm **Update** sẽ tải, thay thế và mở lại app; nếu chạy từ thư mục build, app sẽ mở trang release để tải thủ công.
-
-## Quyền và phân phối
-
-- App không bật App Sandbox để truy cập được toàn hệ thống.
-- Cần **Full Disk Access** để đọc `~/Desktop`, `~/Documents`, `~/Downloads` và iCloud Drive.
-- Bundle ID: `com.rooted.explorer`.
-- Bản phát hành trên GitHub dùng ad-hoc signing (Hardened Runtime bật, chưa notarize) và phát hành ngoài Mac App Store.
-
-## Đóng góp
-
-1. Fork repo và tạo nhánh từ `main`.
-2. Giữ cấu trúc MVVM hiện tại: View → ViewModel → Service, service dùng singleton.
-3. Mở pull request kèm mô tả thay đổi và cách kiểm tra.
-
-Khi báo lỗi, ghi rõ phiên bản macOS, Xcode và các bước tái hiện.
-
-## Giấy phép
-
-[MIT](LICENSE)
+Phát hành theo giấy phép [MIT License](LICENSE).
