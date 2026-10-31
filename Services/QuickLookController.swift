@@ -7,7 +7,7 @@ import QuickLookUI
 /// Controller duy nhất của app: giữ danh sách URL đang xem, tự xử lý
 /// Escape/Space để đóng panel.
 @MainActor
-final class QuickLookController: NSObject, @preconcurrency QLPreviewPanelDataSource, @preconcurrency QLPreviewPanelDelegate {
+final class QuickLookController: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
     static let shared = QuickLookController()
 
     nonisolated(unsafe) private var items: [URL] = []

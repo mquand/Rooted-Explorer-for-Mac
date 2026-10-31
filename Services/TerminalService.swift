@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 /// Service để mở terminal và IDE
-class TerminalService: @unchecked Sendable {
+final class TerminalService: @unchecked Sendable {
     static let shared = TerminalService()
     
     private init() {}
@@ -35,12 +35,7 @@ class TerminalService: @unchecked Sendable {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
         task.arguments = ["-a", app.rawValue, path]
-        
-        do {
-            try task.run()
-        } catch {
-            print("Failed to open terminal: \(error)")
-        }
+        try? task.run()
     }
     
     /// Mở IDE tại thư mục

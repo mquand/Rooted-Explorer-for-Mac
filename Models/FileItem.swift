@@ -106,7 +106,7 @@ struct FileItem: Identifiable, Hashable {
         return formatter
     }()
 
-    private nonisolated(unsafe) static let dateFormatter: DateFormatter = {
+    private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
         formatter.timeStyle = .short
