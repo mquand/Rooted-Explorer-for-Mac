@@ -646,6 +646,7 @@ struct TagDots: View {
 
 // MARK: - Thumbnail
 
+@MainActor
 struct FileThumbnail: View {
     let file: FileItem
     let size: CGFloat

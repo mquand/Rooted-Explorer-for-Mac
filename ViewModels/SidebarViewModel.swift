@@ -116,7 +116,7 @@ final class SidebarViewModel: ObservableObject {
             }
 
             let childPath = child.path
-            guard !ignoredPaths.contains(childPath) else { continue }
+            guard !ignoredPathsList.contains(childPath) else { continue }
 
             nodes.append(DirectoryNode(
                 name: child.lastPathComponent,
@@ -167,7 +167,7 @@ final class SidebarViewModel: ObservableObject {
         }
     }
 
-    private static let ignoredPaths: Set<String> = [
+    private nonisolated(unsafe) static let ignoredPathsList: Set<String> = [
         "/Volumes",
         "/dev",
         "/cores",

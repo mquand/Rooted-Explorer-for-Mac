@@ -3,8 +3,8 @@ import AppKit
 import QuickLookThumbnailing
 
 /// Tạo và cache thumbnail cho file/thư mục.
-final class ThumbnailService {
-    static let shared = ThumbnailService()
+final class ThumbnailService: Sendable {
+    nonisolated(unsafe) static let shared = ThumbnailService()
 
     private let cache = NSCache<NSString, NSImage>()
     private let queue = DispatchQueue(label: "com.rooted.thumbnails", qos: .userInitiated, attributes: .concurrent)
@@ -14,7 +14,7 @@ final class ThumbnailService {
         cache.totalCostLimit = 120 * 1024 * 1024
     }
 
-    func thumbnail(for path: String, size: CGFloat) async -> NSImage? {
+    nonisolated func thumbnail(for path: String, size: CGFloat) async -> NSImage? {
         let cacheKey = key(for: path, size: size)
         if let cached = cache.object(forKey: cacheKey) {
             return cached
@@ -34,7 +34,7 @@ final class ThumbnailService {
         return result
     }
 
-    private func iconForFile(_ path: String) -> NSImage {
+    nonisolated private func iconForFile(_ path: String) -> NSImage {
         let attributes = try? FileManager.default.attributesOfItem(atPath: path)
         let isDirectory = (attributes?[.type] as? FileAttributeType) == .typeDirectory
 
@@ -53,7 +53,7 @@ final class ThumbnailService {
         return icon
     }
 
-    private func quickLookThumbnail(for path: String, size: CGFloat) async -> NSImage? {
+    nonisolated private func quickLookThumbnail(for path: String, size: CGFloat) async -> NSImage? {
         return await withTaskCancellationHandler(operation: {
             await withCheckedContinuation { continuation in
                 let request = QLThumbnailGenerator.Request(
@@ -72,7 +72,7 @@ final class ThumbnailService {
         })
     }
 
-    private func key(for path: String, size: CGFloat) -> NSString {
+    nonisolated private func key(for path: String, size: CGFloat) -> NSString {
         let attributes = try? FileManager.default.attributesOfItem(atPath: path)
         let modDate = (attributes?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
         return "\(path)|\(Int(size))|\(modDate)" as NSString

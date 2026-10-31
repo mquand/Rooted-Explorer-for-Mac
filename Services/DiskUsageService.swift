@@ -4,8 +4,8 @@ import Foundation
 ///
 /// Mọi hàm quét đều chạy nền và hủy được (`Task.checkCancellation()` giữa chừng),
 /// nên đóng sheet khi quét đang chạy sẽ dừng quét thật sự.
-final class DiskUsageService {
-    static let shared = DiskUsageService()
+final class DiskUsageService: Sendable {
+    nonisolated(unsafe) static let shared = DiskUsageService()
 
     private init() {}
 

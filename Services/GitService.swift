@@ -5,8 +5,8 @@ import Foundation
 /// Dùng đúng một tiến trình `git status --porcelain -z --branch` cho mỗi repo,
 /// parse dạng NUL-separated để không phụ thuộc quoting tên file, và cache theo
 /// repo root để mở/đóng thư mục liên tục không phải chạy git lại.
-final class GitService {
-    static let shared = GitService()
+final class GitService: Sendable {
+    nonisolated(unsafe) static let shared = GitService()
 
     private init() {}
 

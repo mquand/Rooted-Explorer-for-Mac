@@ -6,8 +6,9 @@ import QuickLookUI
 ///
 /// Controller duy nhất của app: giữ danh sách URL đang xem, tự xử lý
 /// Escape/Space để đóng panel.
+@MainActor
 final class QuickLookController: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
-    static let shared = QuickLookController()
+    nonisolated(unsafe) static let shared = QuickLookController()
 
     private var items: [URL] = []
 
@@ -16,7 +17,7 @@ final class QuickLookController: NSObject, QLPreviewPanelDataSource, QLPreviewPa
     }
 
     var isVisible: Bool {
-        QLPreviewPanel.sharedPreviewPanelExists() && QLPreviewPanel.shared().isVisible
+        QLPreviewPanel.sharedPreviewPanelExists() && QLPreviewPanel.shared()?.isVisible ?? false
     }
 
     /// Bật/tắt Quick Look cho danh sách URL. Nếu đang mở thì đóng lại.
@@ -33,14 +34,14 @@ final class QuickLookController: NSObject, QLPreviewPanelDataSource, QLPreviewPa
 
         items = urls
         let panel = QLPreviewPanel.shared()
-        panel.dataSource = self
-        panel.delegate = self
-        panel.makeKeyAndOrderFront(nil)
+        panel?.dataSource = self
+        panel?.delegate = self
+        panel?.makeKeyAndOrderFront(nil)
     }
 
     func hide() {
         guard QLPreviewPanel.sharedPreviewPanelExists() else { return }
-        QLPreviewPanel.shared().orderOut(nil)
+        QLPreviewPanel.shared()?.orderOut(nil)
     }
 
     // MARK: - QLPreviewPanelDataSource
@@ -57,7 +58,7 @@ final class QuickLookController: NSObject, QLPreviewPanelDataSource, QLPreviewPa
     // MARK: - QLPreviewPanelDelegate
 
     /// Đóng panel khi người dùng bấm Escape hoặc Space.
-    func previewPanel(_ panel: QLPreviewPanel!, handleEvent event: NSEvent!) -> Bool {
+    func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
         guard let event else { return false }
 
         if event.keyCode == 53 || event.keyCode == 49 {
