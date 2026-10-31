@@ -670,6 +670,25 @@ struct FileListView: View {
     }
 
     private func handleMouseDown(_ event: NSEvent) {
+        guard let window = event.window, window === NSApp.keyWindow else { return }
+
+        // 1. Huỷ trạng thái sửa đường dẫn & nhả focus khi bấm ra bên ngoài
+        if let textResponder = window.firstResponder as? NSTextView {
+            let clickLocation = event.locationInWindow
+            let locationInResponder = textResponder.convert(clickLocation, from: nil)
+            let expandedBounds = textResponder.bounds.insetBy(dx: -12, dy: -8)
+
+            if !expandedBounds.contains(locationInResponder) {
+                if viewModel.isEditingPath {
+                    viewModel.cancelPathEditing()
+                }
+                window.makeFirstResponder(nil)
+            }
+        } else if viewModel.isEditingPath {
+            viewModel.cancelPathEditing()
+        }
+
+        // 2. Bỏ chọn khi click vào vùng trống của bảng (NSTableView rỗng bên dưới các row)
         guard !viewModel.selectedItems.isEmpty else { return }
 
         // Nếu người dùng đang giữ ⌘ hoặc ⇧ thì không can thiệp (chọn thêm vùng)
@@ -678,10 +697,8 @@ struct FileListView: View {
             return
         }
 
-        guard let window = event.window, window === NSApp.keyWindow else { return }
         guard let hitView = window.contentView?.hitTest(event.locationInWindow) else { return }
 
-        // Bỏ chọn khi click vào vùng trống của bảng (NSTableView rỗng bên dưới các row)
         if let tableView = (hitView as? NSTableView) ?? (hitView.enclosingScrollView?.documentView as? NSTableView) {
             let pointInTable = tableView.convert(event.locationInWindow, from: nil)
             let row = tableView.row(at: pointInTable)
@@ -694,6 +711,13 @@ struct FileListView: View {
     }
 
     private func handleKey(_ event: NSEvent) -> NSEvent? {
+        // Nếu đang sửa đường dẫn và bấm Escape: huỷ ngay lập tức
+        if event.keyCode == 53 && viewModel.isEditingPath {
+            viewModel.cancelPathEditing()
+            NSApp.keyWindow?.makeFirstResponder(nil)
+            return nil
+        }
+
         // Không chặn khi người dùng đang gõ trong ô tìm kiếm/đường dẫn.
         if let responder = NSApp.keyWindow?.firstResponder, responder is NSTextView {
             return event

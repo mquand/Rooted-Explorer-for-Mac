@@ -1,41 +1,96 @@
 import SwiftUI
+import AppKit
 
 /// Thanh đường dẫn dạng breadcrumb kiểu Windows Explorer: mỗi cấp là một nút
 /// bấm được, có nút sửa để gõ đường dẫn trực tiếp (hoặc phím ⇧⌘G).
 struct PathBar: View {
     @ObservedObject var viewModel: FileListViewModel
 
-    @State private var isEditing = false
     @FocusState private var isFieldFocused: Bool
+    @State private var wasFocused = false
 
     var body: some View {
         Group {
-            if isEditing {
-                TextField("Path", text: $viewModel.pathInput)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(.body, design: .monospaced))
-                    .focused($isFieldFocused)
-                    .onSubmit {
-                        viewModel.submitPathInput()
-                        isEditing = false
+            if viewModel.isEditingPath {
+                HStack(spacing: 4) {
+                    Image(systemName: "folder")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+
+                    TextField("Path", text: $viewModel.pathInput)
+                        .textFieldStyle(.plain)
+                        .font(.system(.body, design: .monospaced))
+                        .focused($isFieldFocused)
+                        .onSubmit {
+                            viewModel.submitPathInput()
+                            wasFocused = false
+                            isFieldFocused = false
+                            NSApp.keyWindow?.makeFirstResponder(nil)
+                        }
+                        .onExitCommand {
+                            viewModel.cancelPathEditing()
+                            wasFocused = false
+                            isFieldFocused = false
+                            NSApp.keyWindow?.makeFirstResponder(nil)
+                        }
+
+                    Button {
+                        viewModel.cancelPathEditing()
+                        wasFocused = false
+                        isFieldFocused = false
+                        NSApp.keyWindow?.makeFirstResponder(nil)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
                     }
-                    .onExitCommand {
-                        viewModel.pathInput = viewModel.currentPath
-                        isEditing = false
-                    }
+                    .buttonStyle(.borderless)
+                    .help("Cancel editing (Esc)")
+                }
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.accentColor, lineWidth: 1.5)
+                )
             } else {
                 breadcrumbs
             }
         }
-        .onChange(of: isEditing) { editing in
+        .onChange(of: isFieldFocused) { focused in
+            if focused {
+                wasFocused = true
+            } else if wasFocused {
+                wasFocused = false
+                viewModel.cancelPathEditing()
+            }
+        }
+        .onChange(of: viewModel.isEditingPath) { editing in
             if editing {
-                isFieldFocused = true
+                DispatchQueue.main.async {
+                    isFieldFocused = true
+                }
+            } else {
+                wasFocused = false
+                isFieldFocused = false
             }
         }
         .onChange(of: viewModel.focusPathField) { shouldFocus in
             guard shouldFocus else { return }
             viewModel.focusPathField = false
-            isEditing = true
+            startEditing()
+        }
+    }
+
+    private func startEditing() {
+        viewModel.pathInput = viewModel.currentPath
+        viewModel.isEditingPath = true
+        DispatchQueue.main.async {
+            isFieldFocused = true
         }
     }
 
@@ -57,8 +112,14 @@ struct PathBar: View {
                 }
             }
 
+            Spacer(minLength: 8)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    startEditing()
+                }
+
             Button {
-                isEditing = true
+                startEditing()
             } label: {
                 Image(systemName: "pencil")
                     .font(.system(size: 11))
@@ -67,12 +128,26 @@ struct PathBar: View {
             .buttonStyle(.borderless)
             .help("Edit path (⇧⌘G)")
         }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.4))
+        )
         .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            startEditing()
+        }
     }
 
     private func crumbButton(for component: Crumb, isCurrent: Bool) -> some View {
         Button {
-            viewModel.navigateTo(path: component.path)
+            if isCurrent {
+                startEditing()
+            } else {
+                viewModel.navigateTo(path: component.path)
+            }
         } label: {
             Text(component.name)
                 .lineLimit(1)
@@ -85,8 +160,7 @@ struct PathBar: View {
                 )
         }
         .buttonStyle(.borderless)
-        .disabled(isCurrent)
-        .help(component.path)
+        .help(isCurrent ? "Click to edit path" : component.path)
     }
 
     // MARK: - Đường dẫn -> các cấp

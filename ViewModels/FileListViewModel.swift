@@ -41,6 +41,7 @@ class FileListViewModel: ObservableObject {
     @Published var gitBranch: String?
     @Published var folderSizes: [String: UInt64] = [:]
     @Published var showDeleteImmediatelyConfirm: Bool = false
+    @Published var isEditingPath: Bool = false
 
     var displayedFiles: [FileItem] {
         switch filterMode {
@@ -266,6 +267,7 @@ class FileListViewModel: ObservableObject {
             return
         }
 
+        isEditingPath = false
         leaveSearch()
         currentPath = path
         pathInput = path
@@ -287,6 +289,7 @@ class FileListViewModel: ObservableObject {
     }
 
     func submitPathInput() {
+        isEditingPath = false
         let trimmed = pathInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             pathInput = currentPath
@@ -297,6 +300,12 @@ class FileListViewModel: ObservableObject {
         let expanded = (trimmed as NSString).expandingTildeInPath
         navigateTo(path: expanded)
         pathInput = currentPath
+        focusPathField = false
+    }
+
+    func cancelPathEditing() {
+        pathInput = currentPath
+        isEditingPath = false
         focusPathField = false
     }
 
@@ -453,6 +462,9 @@ class FileListViewModel: ObservableObject {
     func deselectAll() {
         selectedItems.removeAll()
         lastSelectedPath = nil
+        if isEditingPath {
+            cancelPathEditing()
+        }
     }
 
     func requestDeleteImmediately() {
