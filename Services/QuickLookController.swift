@@ -6,6 +6,7 @@ import QuickLookUI
 ///
 /// Controller duy nhất của app: giữ danh sách URL đang xem, tự xử lý
 /// Escape/Space để đóng panel.
+@MainActor
 final class QuickLookController: NSObject, @preconcurrency QLPreviewPanelDataSource, @preconcurrency QLPreviewPanelDelegate {
     static let shared = QuickLookController()
 
@@ -15,7 +16,7 @@ final class QuickLookController: NSObject, @preconcurrency QLPreviewPanelDataSou
         super.init()
     }
 
-    nonisolated var isVisible: Bool {
+    var isVisible: Bool {
         QLPreviewPanel.sharedPreviewPanelExists() && QLPreviewPanel.shared()?.isVisible ?? false
     }
 
@@ -46,14 +47,16 @@ final class QuickLookController: NSObject, @preconcurrency QLPreviewPanelDataSou
     // MARK: - QLPreviewPanelDataSource
 
     nonisolated func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int {
-        // Access items via self (captured in closure, safe within sync context)
-        return (self as? QuickLookController)?.items.count ?? 0
+        MainActor.assumeIsolated {
+            items.count
+        }
     }
 
     nonisolated func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! {
-        guard let self = self as? QuickLookController else { return nil }
-        guard self.items.indices.contains(index) else { return nil }
-        return self.items[index] as NSURL
+        MainActor.assumeIsolated {
+            guard items.indices.contains(index) else { return nil }
+            return items[index] as NSURL
+        }
     }
 
     // MARK: - QLPreviewPanelDelegate
@@ -63,7 +66,9 @@ final class QuickLookController: NSObject, @preconcurrency QLPreviewPanelDataSou
         guard let event else { return false }
 
         if event.keyCode == 53 || event.keyCode == 49 {
-            (self as? QuickLookController)?.hide()
+            MainActor.assumeIsolated {
+                hide()
+            }
             return true
         }
         return false

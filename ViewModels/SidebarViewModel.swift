@@ -167,7 +167,7 @@ final class SidebarViewModel: ObservableObject {
         }
     }
 
-    private static let ignoredPathsList: Set<String> = [
+    nonisolated private static let ignoredPathsList: Set<String> = [
         "/Volumes",
         "/dev",
         "/cores",

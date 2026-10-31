@@ -3,11 +3,11 @@ import AppKit
 import QuickLookThumbnailing
 
 /// Tạo và cache thumbnail cho file/thư mục.
-final class ThumbnailService: @unchecked Sendable {
+@MainActor
+final class ThumbnailService {
     static let shared = ThumbnailService()
 
     private let cache = NSCache<NSString, NSImage>()
-    private let queue = DispatchQueue(label: "com.rooted.thumbnails", qos: .userInitiated, attributes: .concurrent)
 
     private init() {
         cache.countLimit = 300
@@ -78,7 +78,7 @@ final class ThumbnailService: @unchecked Sendable {
         return "\(path)|\(Int(size))|\(modDate)" as NSString
     }
 
-    static func supportsPreview(_ path: String) -> Bool {
+    nonisolated static func supportsPreview(_ path: String) -> Bool {
         let ext = (path as NSString).pathExtension.lowercased()
         let previewable: Set<String> = [
             "png", "jpg", "jpeg", "gif", "heic", "heif", "webp", "tiff", "bmp", "svg",
