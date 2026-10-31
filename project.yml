@@ -28,8 +28,8 @@ targets:
       base:
         PRODUCT_NAME: Rooted
         PRODUCT_BUNDLE_IDENTIFIER: com.rooted.explorer
-        MARKETING_VERSION: "0.2.2"
-        CURRENT_PROJECT_VERSION: "4"
+        MARKETING_VERSION: "0.3.0"
+        CURRENT_PROJECT_VERSION: "5"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_NSPrincipalClass: NSApplication
         INFOPLIST_KEY_CFBundleDisplayName: Rooted
