@@ -14,10 +14,6 @@ final class ThumbnailService {
         cache.totalCostLimit = 120 * 1024 * 1024
     }
 
-    func cachedThumbnail(for path: String, size: CGFloat) -> NSImage? {
-        cache.object(forKey: key(for: path, size: size))
-    }
-
     func thumbnail(for path: String, size: CGFloat) async -> NSImage? {
         let cacheKey = key(for: path, size: size)
         if let cached = cache.object(forKey: cacheKey) {
@@ -28,12 +24,33 @@ final class ThumbnailService {
         if Self.supportsPreview(path) {
             image = await quickLookThumbnail(for: path, size: size)
         } else {
-            image = NSWorkspace.shared.icon(forFile: path)
+            // File thường: icon hệ thống — cache theo đuôi file để không
+            // phải hỏi lại NSWorkspace mỗi lần cuộn qua lại.
+            image = iconForFile(path)
         }
 
         let result = image ?? NSWorkspace.shared.icon(forFile: path)
         cache.setObject(result, forKey: cacheKey, cost: Int(size * size * 4))
         return result
+    }
+
+    private func iconForFile(_ path: String) -> NSImage {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: path)
+        let isDirectory = (attributes?[.type] as? FileAttributeType) == .typeDirectory
+
+        // Không cache thư mục: icon thư mục có thể được người dùng tuỳ biến riêng.
+        guard !isDirectory else { return NSWorkspace.shared.icon(forFile: path) }
+
+        let ext = (path as NSString).pathExtension.lowercased()
+        let key = "icon|\(ext)" as NSString
+
+        if let cached = cache.object(forKey: key) {
+            return cached
+        }
+
+        let icon = NSWorkspace.shared.icon(forFile: path)
+        cache.setObject(icon, forKey: key, cost: 64 * 64 * 4)
+        return icon
     }
 
     private func quickLookThumbnail(for path: String, size: CGFloat) async -> NSImage? {

@@ -72,23 +72,6 @@ final class SidebarViewModel: ObservableObject {
         }
     }
 
-    /// Mở rộng tất cả thư mục cha để path hiện tại hiển thị trong sidebar.
-    func expandPath(_ path: String) {
-        var components: [String] = []
-        var current = path
-
-        while !current.isEmpty, current != "/" {
-            components.append(current)
-            current = (current as NSString).deletingLastPathComponent
-        }
-
-        for component in components.reversed() {
-            if !expandedPaths.contains(component) {
-                toggleNode(at: component, expanded: true)
-            }
-        }
-    }
-
     func collapseAll() {
         expandedPaths.removeAll()
         loadRootTree()

@@ -5,11 +5,14 @@ struct SidebarView: View {
     @StateObject private var viewModel = SidebarViewModel()
     @ObservedObject var fileListViewModel: FileListViewModel
 
+    /// Tính một lần khi sidebar mở — tránh kiểm tra fileExists mỗi lần render.
+    @State private var favorites: [FavoriteLocation] = []
+
     private var selectedPath: String {
         fileListViewModel.currentPath
     }
 
-    private var favorites: [FavoriteLocation] {
+    private func loadFavorites() {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let candidates = [
             FavoriteLocation(name: "Home", path: home, icon: "house"),
@@ -30,7 +33,7 @@ struct SidebarView: View {
             )
         ]
 
-        return candidates.filter {
+        favorites = candidates.filter {
             FileManager.default.fileExists(atPath: $0.path)
         }
     }
@@ -40,6 +43,24 @@ struct SidebarView: View {
             Section("Favorites") {
                 ForEach(favorites) { item in
                     sidebarRow(name: item.name, path: item.path, icon: item.icon)
+                }
+            }
+
+            Section("Tags") {
+                ForEach(FinderTag.standard) { tag in
+                    HStack(spacing: 8) {
+                        Image(systemName: "circle.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(tag.color)
+                        Text(tag.name)
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        fileListViewModel.startTagSearch(tag)
+                    }
+                    .help("Tìm tất cả file gắn tag này")
                 }
             }
 
@@ -75,6 +96,7 @@ struct SidebarView: View {
         }
         .listStyle(.sidebar)
         .onAppear {
+            loadFavorites()
             viewModel.refreshVolumes()
         }
     }

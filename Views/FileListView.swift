@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import QuickLookUI
 
 struct FileListView: View {
     @ObservedObject var viewModel: FileListViewModel
@@ -9,12 +10,17 @@ struct FileListView: View {
     @State private var isRenaming = false
     @State private var renameTarget: FileItem?
     @State private var renameName = ""
+    @State private var showAnalysis = false
+    @State private var keyMonitor: Any?
+    @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
             topBar
             Divider()
             content
+            Divider()
+            statusBar
         }
         .alert("Rename", isPresented: $isRenaming) {
             TextField("Name", text: $renameName)
@@ -30,6 +36,16 @@ struct FileListView: View {
         } message: {
             Text("Enter a new name for this item.")
         }
+        .sheet(isPresented: $showAnalysis) {
+            StorageAnalysisSheet(path: viewModel.currentPath)
+        }
+        .onChange(of: viewModel.focusSearchField) { shouldFocus in
+            guard shouldFocus else { return }
+            viewModel.focusSearchField = false
+            isSearchFocused = true
+        }
+        .onAppear { installKeyMonitor() }
+        .onDisappear { removeKeyMonitor() }
     }
 
     // MARK: - Top bar
@@ -53,11 +69,11 @@ struct FileListView: View {
 
                 navButton("house", help: "Home") { viewModel.navigateToHome() }
 
-                TextField("Path", text: $viewModel.pathInput)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(.body, design: .monospaced))
-                    .onSubmit { viewModel.submitPathInput() }
-                    .frame(minWidth: 160, maxWidth: .infinity)
+                PathBar(viewModel: viewModel)
+                    .frame(minWidth: 140, maxWidth: .infinity)
+
+                searchField
+                searchScopeMenu
 
                 if let branch = viewModel.gitBranch {
                     HStack(spacing: 3) {
@@ -79,31 +95,16 @@ struct FileListView: View {
                 .labelsHidden()
                 .frame(width: 118)
 
-                Menu {
-                    ForEach(FileListViewModel.SortOption.allCases, id: \.self) { option in
-                        Button {
-                            viewModel.sortOption = option
-                        } label: {
-                            if viewModel.sortOption == option {
-                                Label(option.rawValue, systemImage: "checkmark")
-                            } else {
-                                Text(option.rawValue)
-                            }
-                        }
-                    }
-                } label: {
-                    Image(systemName: "arrow.up.arrow.down")
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help("Sort")
-
                 navButton(settings.showHiddenFiles ? "eye" : "eye.slash", help: "Show Hidden Files") {
                     settings.showHiddenFiles.toggle()
                 }
 
                 navButton("terminal", help: "Open in Terminal") {
                     TerminalService.shared.openTerminal(at: viewModel.currentPath)
+                }
+
+                navButton("chart.bar.doc.horizontal", help: "Analyze Storage") {
+                    showAnalysis = true
                 }
 
                 navButton("arrow.clockwise", help: "Refresh") {
@@ -130,6 +131,57 @@ struct FileListView: View {
         .padding(.bottom, 6)
     }
 
+    private var searchField: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.secondary)
+
+            TextField("Search", text: $viewModel.searchQuery)
+                .textFieldStyle(.plain)
+                .focused($isSearchFocused)
+
+            if !viewModel.searchQuery.isEmpty {
+                Button {
+                    viewModel.leaveSearch()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("Clear search")
+            }
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .frame(width: 200)
+        .help("Search in this folder (⌘F)")
+    }
+
+    private var searchScopeMenu: some View {
+        Menu {
+            ForEach(FileListViewModel.SearchScope.allCases) { scope in
+                Button {
+                    viewModel.searchScope = scope
+                } label: {
+                    if viewModel.searchScope == scope {
+                        Label(scope.rawValue, systemImage: "checkmark")
+                    } else {
+                        Text(scope.rawValue)
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "text.magnifyingglass")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Search in file names or in file contents")
+    }
+
     private func navButton(_ systemImage: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
@@ -143,7 +195,9 @@ struct FileListView: View {
 
     @ViewBuilder
     private var content: some View {
-        if viewModel.isLoading && viewModel.files.isEmpty {
+        if viewModel.isSearchActive {
+            SearchResultsView(viewModel: viewModel)
+        } else if viewModel.isLoading && viewModel.files.isEmpty {
             ProgressView("Loading…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let error = viewModel.errorMessage, viewModel.files.isEmpty {
@@ -177,8 +231,8 @@ struct FileListView: View {
     // MARK: - List
 
     private var listView: some View {
-        Table(viewModel.files, selection: $viewModel.selectedItems) {
-            TableColumn("Name") { file in
+        Table(viewModel.files, selection: $viewModel.selectedItems, sortOrder: $viewModel.sortOrder) {
+            TableColumn("Name", value: \.name) { file in
                 tableCell(for: file) {
                     HStack(spacing: 6) {
                         Image(systemName: file.icon)
@@ -196,12 +250,14 @@ struct FileListView: View {
                                 .background(gitStatusColor(file.gitStatus))
                                 .cornerRadius(4)
                         }
+
+                        TagDots(tags: file.tags)
                     }
                 }
             }
             .width(min: 220, max: 500)
 
-            TableColumn("Size") { file in
+            TableColumn("Size", value: \.size) { file in
                 tableCell(for: file) {
                     Text(viewModel.sizeText(for: file))
                         .monospacedDigit()
@@ -210,7 +266,7 @@ struct FileListView: View {
             }
             .width(min: 90, max: 140)
 
-            TableColumn("Kind") { file in
+            TableColumn("Kind", value: \.kind) { file in
                 tableCell(for: file) {
                     Text(file.kind)
                         .foregroundColor(.secondary)
@@ -219,7 +275,7 @@ struct FileListView: View {
             }
             .width(min: 100, max: 180)
 
-            TableColumn("Modified") { file in
+            TableColumn("Modified", value: \.modified) { file in
                 tableCell(for: file) {
                     Text(file.formattedDate)
                         .foregroundColor(.secondary)
@@ -266,6 +322,8 @@ struct FileListView: View {
                             .multilineTextAlignment(.center)
                             .lineLimit(2)
                             .foregroundColor(file.isHidden ? .secondary : .primary)
+
+                        TagDots(tags: file.tags)
                     }
                     .padding(8)
                     .frame(maxWidth: .infinity)
@@ -322,6 +380,7 @@ struct FileListView: View {
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                                 .frame(width: 78)
+                            TagDots(tags: file.tags)
                         }
                         .padding(6)
                         .background(
@@ -342,6 +401,58 @@ struct FileListView: View {
         }
         .contextMenu { backgroundMenu }
     }
+
+    // MARK: - Status bar
+
+    private var statusBar: some View {
+        HStack(spacing: 16) {
+            if viewModel.isSearchActive {
+                Text("\(viewModel.searchHits.count) results")
+            } else {
+                Text("\(viewModel.files.count) items")
+            }
+
+            if !viewModel.selectedItems.isEmpty {
+                Text("\(viewModel.selectedItems.count) selected")
+                if let size = selectionSizeText {
+                    Text(size)
+                }
+            }
+
+            Spacer()
+
+            if let free = viewModel.volumeFreeSpace {
+                Text("\(Self.sizeFormatter.string(fromByteCount: Int64(free))) free")
+            }
+
+            if let branch = viewModel.gitBranch {
+                Label(branch, systemImage: "arrow.triangle.branch")
+            }
+        }
+        .font(.caption)
+        .foregroundColor(.secondary)
+        .lineLimit(1)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var selectionSizeText: String? {
+        let sizes = viewModel.selectedFileItems
+            .filter { !$0.isDirectory }
+            .map { $0.size }
+        guard !sizes.isEmpty else { return nil }
+        let total = sizes.reduce(0, +)
+        return Self.sizeFormatter.string(fromByteCount: Int64(total))
+    }
+
+    private static let sizeFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB, .useGB]
+        formatter.countStyle = .file
+        return formatter
+    }()
 
     // MARK: - Interaction
 
@@ -400,6 +511,10 @@ struct FileListView: View {
 
         Divider()
 
+        Button("Analyze Storage…") {
+            showAnalysis = true
+        }
+
         Button(settings.showHiddenFiles ? "Hide Hidden Files" : "Show Hidden Files") {
             settings.showHiddenFiles.toggle()
         }
@@ -412,6 +527,119 @@ struct FileListView: View {
         case .staged: return .blue
         case .conflict: return .red
         case .none: return .clear
+        }
+    }
+
+    // MARK: - Bàn phím (Space, phím mũi tên, gõ để chọn)
+
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            self.handleKey(event)
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+        }
+        keyMonitor = nil
+    }
+
+    private func handleKey(_ event: NSEvent) -> NSEvent? {
+        // Không chặn khi người dùng đang gõ trong ô tìm kiếm/đường dẫn.
+        if let responder = NSApp.keyWindow?.firstResponder, responder is NSTextView {
+            return event
+        }
+
+        // Đang đứng trên button/menu (vd. đang mở menu) -> để control tự xử lý.
+        if let responder = NSApp.keyWindow?.firstResponder,
+           responder is NSButton || responder is NSPopUpButton || responder is NSComboBox {
+            return event
+        }
+
+        // Sheet (Rename alert, Analyze sheet) đang mở -> không can thiệp.
+        if let window = NSApp.keyWindow, window.isSheet {
+            return event
+        }
+
+        // Quick Look đang mở -> để panel tự xử lý phím (Escape/Space đóng panel).
+        if QLPreviewPanel.sharedPreviewPanelExists(), NSApp.keyWindow === QLPreviewPanel.shared() {
+            return event
+        }
+
+        // Phím mũi tên trên một số bàn phím Apple mang cờ .function — loại ra
+        // để "không có modifier" vẫn đúng nghĩa.
+        let flags = event.modifierFlags
+            .intersection(.deviceIndependentFlagsMask)
+            .subtracting(.function)
+        let isPlain = flags.isEmpty || flags == .shift
+
+        switch event.keyCode {
+        case 49: // Space: Quick Look
+            guard flags.isEmpty else { return event }
+            QuickLookController.shared.toggle(urls: viewModel.previewURLs)
+            return nil
+
+        case 36: // Return: mở item đang chọn
+            guard flags.isEmpty, !viewModel.isSearchActive else { return event }
+            viewModel.openFocusedItem()
+            return nil
+
+        case 53: // Escape: thoát tìm kiếm
+            if viewModel.isSearchActive {
+                viewModel.leaveSearch()
+                return nil
+            }
+            return event
+
+        case 123, 124, 125, 126: // Phím mũi tên
+            // Chỉ chặn khi không có modifier (⌘↑ = Go menu, Shift+ arrow = chọn
+            // vùng, còn List mode để Table tự xử lý).
+            guard flags.isEmpty,
+                  settings.viewMode != .list,
+                  !viewModel.isSearchActive else { return event }
+            switch event.keyCode {
+            case 123, 126: viewModel.moveSelection(by: -1) // trái / lên
+            default: viewModel.moveSelection(by: 1)        // phải / xuống
+            }
+            return nil
+
+        default:
+            break
+        }
+
+        // Gõ để chọn (type-to-select) khi không giữ phím chức năng.
+        guard isPlain,
+              !viewModel.isSearchActive,
+              let characters = event.charactersIgnoringModifiers,
+              characters.count == 1,
+              let character = characters.first,
+              character.isLetter || character.isNumber else {
+            return event
+        }
+
+        viewModel.selectByTyping(String(character))
+        return nil
+    }
+}
+
+// MARK: - Tag dots
+
+/// Chấm màu tag Finder hiển thị cạnh tên file.
+struct TagDots: View {
+    let tags: [FinderTag]
+
+    var body: some View {
+        if !tags.isEmpty {
+            HStack(spacing: 3) {
+                ForEach(tags) { tag in
+                    Circle()
+                        .fill(tag.color)
+                        .frame(width: 8, height: 8)
+                }
+            }
         }
     }
 }
@@ -478,6 +706,20 @@ private struct GalleryPreview: View {
                 Text("\(file.kind) · \(viewModel.sizeText(for: file))")
                     .font(.caption)
                     .foregroundColor(.secondary)
+
+                if !file.tags.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(file.tags) { tag in
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(tag.color)
+                                    .frame(width: 8, height: 8)
+                                Text(tag.name)
+                                    .font(.caption2)
+                            }
+                        }
+                    }
+                }
 
                 Text(file.path)
                     .font(.caption2)

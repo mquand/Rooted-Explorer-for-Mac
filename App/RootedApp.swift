@@ -64,6 +64,14 @@ struct AppCommands: Commands {
             .disabled(!hasSelection)
         }
 
+        CommandGroup(after: .pasteboard) {
+            Button("Find…") {
+                viewModel?.focusSearchField = true
+            }
+            .keyboardShortcut("f")
+            .disabled(viewModel == nil)
+        }
+
         CommandGroup(after: .newItem) {
             Button("New Folder") {
                 viewModel?.createNewFolder()
@@ -129,6 +137,12 @@ struct AppCommands: Commands {
             .disabled(viewModel == nil)
 
             Divider()
+
+            Button("Go to Folder…") {
+                viewModel?.focusPathField = true
+            }
+            .keyboardShortcut("g", modifiers: [.command, .shift])
+            .disabled(viewModel == nil)
 
             Button("Home") {
                 viewModel?.navigateToHome()

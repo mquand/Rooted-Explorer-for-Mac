@@ -1,233 +1,201 @@
 import Foundation
-import SwiftUI
 
-/// Service để tìm kiếm file và nội dung
-class SearchService {
-    static let shared = SearchService()
-    
-    private init() {}
-    
-    /// Tìm file theo tên (sử dụng Spotlight)
-    func searchFilesByName(query: String, inPath path: String, completion: @escaping ([String]) -> Void) {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/mdfind")
-        task.arguments = [
-            "-onlyin", path,
-            "-name", query
-        ]
-        
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = pipe
-        
-        do {
-            try task.run()
-            
-            DispatchQueue.global(qos: .userInitiated).async {
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(data: data, encoding: .utf8) ?? ""
-                let results = output.components(separatedBy: .newlines)
-                    .filter { !$0.isEmpty }
-                
-                DispatchQueue.main.async {
-                    completion(results)
-                }
-            }
-        } catch {
-            DispatchQueue.main.async {
-                completion([])
-            }
-        }
-    }
-    
-    /// Tìm file theo tên (sử dụng find command - không dùng Spotlight)
-    func searchFilesByNameWithFind(query: String, inPath path: String, completion: @escaping ([String]) -> Void) {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/find")
-        task.arguments = [
-            path,
-            "-iname", "*\(query)*",
-            "-not", "-path", "*/.*"  // Ẩn file ẩn
-        ]
-        
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = pipe
-        
-        do {
-            try task.run()
-            
-            DispatchQueue.global(qos: .userInitiated).async {
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(data: data, encoding: .utf8) ?? ""
-                let results = output.components(separatedBy: .newlines)
-                    .filter { !$0.isEmpty }
-                
-                DispatchQueue.main.async {
-                    completion(results)
-                }
-            }
-        } catch {
-            DispatchQueue.main.async {
-                completion([])
-            }
-        }
-    }
-    
-    /// Tìm nội dung trong file (sử dụng ripgrep nếu có, fallback grep)
-    func searchContent(query: String, inPath path: String, completion: @escaping ([SearchResult]) -> Void) {
-        // Thử ripgrep trước
-        if isCommandAvailable("rg") {
-            searchWithRipgrep(query: query, inPath: path, completion: completion)
-        } else {
-            searchWithGrep(query: query, inPath: path, completion: completion)
-        }
-    }
-    
-    private func searchWithRipgrep(query: String, inPath path: String, completion: @escaping ([SearchResult]) -> Void) {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/opt/homebrew/bin/rg")
-        task.arguments = [
-            "--line-number",
-            "--no-heading",
-            "--color=never",
-            query,
-            path
-        ]
-        
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = pipe
-        
-        do {
-            try task.run()
-            
-            DispatchQueue.global(qos: .userInitiated).async {
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(data: data, encoding: .utf8) ?? ""
-                let results = self.parseRipgrepOutput(output)
-                
-                DispatchQueue.main.async {
-                    completion(results)
-                }
-            }
-        } catch {
-            DispatchQueue.main.async {
-                completion([])
-            }
-        }
-    }
-    
-    private func searchWithGrep(query: String, inPath path: String, completion: @escaping ([SearchResult]) -> Void) {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/grep")
-        task.arguments = [
-            "-rn",
-            "--exclude-dir=node_modules",
-            "--exclude-dir=.git",
-            query,
-            path
-        ]
-        
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = pipe
-        
-        do {
-            try task.run()
-            
-            DispatchQueue.global(qos: .userInitiated).async {
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(data: data, encoding: .utf8) ?? ""
-                let results = self.parseGrepOutput(output)
-                
-                DispatchQueue.main.async {
-                    completion(results)
-                }
-            }
-        } catch {
-            DispatchQueue.main.async {
-                completion([])
-            }
-        }
-    }
-    
-    private func parseRipgrepOutput(_ output: String) -> [SearchResult] {
-        var results: [SearchResult] = []
-        
-        for line in output.components(separatedBy: .newlines) {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { continue }
-            
-            // Format: file:line:content
-            let parts = trimmed.split(separator: ":", maxSplits: 2)
-            guard parts.count >= 3 else { continue }
-            
-            let filePath = String(parts[0])
-            let lineNumber = Int(parts[1]) ?? 0
-            let content = String(parts[2])
-            
-            results.append(SearchResult(
-                filePath: filePath,
-                fileName: (filePath as NSString).lastPathComponent,
-                lineNumber: lineNumber,
-                content: content
-            ))
-        }
-        
-        return results
-    }
-    
-    private func parseGrepOutput(_ output: String) -> [SearchResult] {
-        var results: [SearchResult] = []
-        
-        for line in output.components(separatedBy: .newlines) {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { continue }
-            
-            // Format: file:line:content
-            let parts = trimmed.split(separator: ":", maxSplits: 2)
-            guard parts.count >= 3 else { continue }
-            
-            let filePath = String(parts[0])
-            let lineNumber = Int(parts[1]) ?? 0
-            let content = String(parts[2])
-            
-            results.append(SearchResult(
-                filePath: filePath,
-                fileName: (filePath as NSString).lastPathComponent,
-                lineNumber: lineNumber,
-                content: content
-            ))
-        }
-        
-        return results
-    }
-    
-    private func isCommandAvailable(_ command: String) -> Bool {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        task.arguments = [command]
-        
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = pipe
-        
-        do {
-            try task.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let output = String(data: data, encoding: .utf8) ?? ""
-            return !output.isEmpty
-        } catch {
-            return false
-        }
+/// Một dòng kết quả tìm kiếm: file + (tuỳ chọn) dòng/cặp match trong nội dung.
+struct SearchHit: Identifiable, Hashable {
+    var file: FileItem
+    let line: Int?
+    let text: String?
+
+    var id: String {
+        line.map { "\(file.path)#\($0)" } ?? file.path
     }
 }
 
-struct SearchResult: Identifiable {
-    let id = UUID()
-    let filePath: String
-    let fileName: String
-    let lineNumber: Int
-    let content: String
+/// Tìm file theo tên, theo tag hoặc tìm nội dung, bằng công cụ dòng lệnh có sẵn:
+/// Spotlight (`mdfind`) cho tên/tag, ripgrep hoặc grep cho nội dung.
+///
+/// Mọi tiến trình đều chạy nền; kết quả cũ bị loại bằng generation ở ViewModel.
+final class SearchService {
+    static let shared = SearchService()
+
+    private init() {}
+
+    private static let resultLimit = 500
+
+    // MARK: - Tìm theo tên
+
+    func searchByName(_ query: String, in path: String) async -> [SearchHit] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        var paths: [String] = []
+
+        if let output = await Self.run(
+            "/usr/bin/mdfind",
+            ["-onlyin", path, "-name", trimmed],
+            allowNoMatch: true
+        ) {
+            paths = Self.lines(output)
+        }
+
+        // Spotlight có thể không index thư mục này — rơi về `find`.
+        if paths.isEmpty {
+            if let output = await Self.run(
+                "/usr/bin/find",
+                [path, "-iname", "*\(Self.sanitize(trimmed))*", "-not", "-path", "*/.*"],
+                allowNoMatch: true
+            ) {
+                paths = Self.lines(output)
+            }
+        }
+
+        return await filesToHits(Array(paths.prefix(Self.resultLimit)))
+    }
+
+    // MARK: - Tìm theo tag
+
+    func searchByTag(_ tag: FinderTag, in path: String) async -> [SearchHit] {
+        let query = "kMDItemUserTags == '\(Self.sanitize(tag.name))'c"
+        guard let output = await Self.run(
+            "/usr/bin/mdfind",
+            ["-onlyin", path, query],
+            allowNoMatch: true
+        ) else {
+            return []
+        }
+
+        let paths = Self.lines(output)
+        return await filesToHits(Array(paths.prefix(Self.resultLimit)))
+    }
+
+    // MARK: - Tìm nội dung
+
+    func searchContent(_ query: String, in path: String) async -> [SearchHit] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        let arguments = ["--line-number", "--no-heading", "--color=never", "--max-columns=300", "-e", trimmed, path]
+
+        var output: String?
+        if let ripgrep = Self.resolveExecutable("rg") {
+            output = await Self.run(ripgrep, arguments, allowNoMatch: true)
+        }
+
+        if output == nil {
+            output = await Self.run(
+                "/usr/bin/grep",
+                ["-rn", "--exclude-dir=node_modules", "--exclude-dir=.git", "-e", trimmed, path],
+                allowNoMatch: true
+            )
+        }
+
+        guard let output else { return [] }
+        return await matchToHits(Self.parseMatches(output))
+    }
+
+    // MARK: - Helpers
+
+    private func filesToHits(_ paths: [String]) async -> [SearchHit] {
+        guard !paths.isEmpty else { return [] }
+
+        let items: [FileItem] = await Task.detached(priority: .userInitiated) {
+            paths.compactMap { FileItem.from(path: $0) }
+        }.value
+
+        return items.map { SearchHit(file: $0, line: nil, text: nil) }
+    }
+
+    private func matchToHits(_ matches: [(path: String, line: Int, text: String)]) async -> [SearchHit] {
+        guard !matches.isEmpty else { return [] }
+
+        let grouped = Dictionary(grouping: matches, by: \.path)
+
+        let items: [FileItem] = await Task.detached(priority: .userInitiated) {
+            grouped.keys.compactMap { FileItem.from(path: $0) }
+        }.value
+
+        return items.map { item in
+            if let first = grouped[item.path]?.first {
+                return SearchHit(file: item, line: first.line, text: first.text)
+            }
+            return SearchHit(file: item, line: nil, text: nil)
+        }
+    }
+
+    private static func lines(_ output: String) -> [String] {
+        output.components(separatedBy: .newlines).filter { !$0.isEmpty }
+    }
+
+    private static func sanitize(_ query: String) -> String {
+        query
+            .replacingOccurrences(of: "\"", with: "")
+            .replacingOccurrences(of: "'", with: "")
+    }
+
+    /// Parse output kiểu `đường-dòng:dòng:cặp-match` (dùng chung cho rg và grep).
+    private static func parseMatches(_ output: String) -> [(path: String, line: Int, text: String)] {
+        var results: [(path: String, line: Int, text: String)] = []
+        results.reserveCapacity(64)
+
+        for raw in output.components(separatedBy: .newlines) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty else { continue }
+
+            let parts = line.split(separator: ":", maxSplits: 2)
+            guard parts.count >= 3, let number = Int(parts[1]) else { continue }
+
+            if results.count >= Self.resultLimit { break }
+
+            results.append((path: String(parts[0]), line: number, text: String(parts[2])))
+        }
+
+        return results
+    }
+
+    /// Tìm executable trong PATH của GUI app (thường ngắn) + các vị trí hay dùng.
+    static func resolveExecutable(_ name: String) -> String? {
+        var directories = (ProcessInfo.processInfo.environment["PATH"] ?? "")
+            .components(separatedBy: ":")
+        directories += ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
+
+        for directory in directories where !directory.isEmpty {
+            let candidate = (directory as NSString).appendingPathComponent(name)
+            if FileManager.default.isExecutableFile(atPath: candidate) {
+                return candidate
+            }
+        }
+        return nil
+    }
+
+    /// Chạy tiến trình nền, trả về stdout. `nil` nếu không chạy được hoặc exit
+    /// khác 0 (trừ khi `allowNoMatch` cho phép exit 1 — "không có kết quả").
+    private static func run(
+        _ executable: String,
+        _ arguments: [String],
+        allowNoMatch: Bool = false
+    ) async -> String? {
+        await Task.detached(priority: .userInitiated) { () -> String? in
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: executable)
+            task.arguments = arguments
+            task.standardOutput = Pipe()
+            task.standardError = FileHandle.nullDevice
+
+            guard let pipe = task.standardOutput as? Pipe else { return nil }
+
+            do {
+                try task.run()
+            } catch {
+                return nil
+            }
+
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            task.waitUntilExit()
+
+            let status = task.terminationStatus
+            guard status == 0 || (allowNoMatch && status == 1) else { return nil }
+
+            return String(data: data, encoding: .utf8) ?? ""
+        }.value
+    }
 }

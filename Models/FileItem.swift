@@ -14,6 +14,32 @@ struct FileItem: Identifiable, Hashable {
     let isHidden: Bool
     var gitStatus: GitStatus = .none
     var isSymlink: Bool = false
+    var tags: [FinderTag] = []
+
+    /// Đọc một file từ đĩa (kèm tag). Trả về nil nếu không đọc được.
+    static func from(path: String) -> FileItem? {
+        let fileManager = FileManager.default
+
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: path, isDirectory: &isDirectory) else { return nil }
+
+        let attributes = try? fileManager.attributesOfItem(atPath: path)
+        let size = attributes?[.size] as? UInt64 ?? 0
+        let modified = attributes?[.modificationDate] as? Date ?? .distantPast
+        let isSymlink = (attributes?[.type] as? FileAttributeType) == .typeSymbolicLink
+        let name = (path as NSString).lastPathComponent
+
+        return FileItem(
+            name: name,
+            path: path,
+            isDirectory: isDirectory.boolValue,
+            size: size,
+            modified: modified,
+            isHidden: name.hasPrefix("."),
+            isSymlink: isSymlink,
+            tags: TagService.tags(for: path)
+        )
+    }
 
     var icon: String {
         if isSymlink { return "arrow.turn.right" }
@@ -66,10 +92,6 @@ struct FileItem: Identifiable, Hashable {
             return ext.isEmpty ? "Document" : ext.uppercased()
         }
         return type.localizedDescription ?? ext.uppercased()
-    }
-
-    var isPreviewable: Bool {
-        !isDirectory && ThumbnailService.supportsPreview(path)
     }
 
     private static let byteFormatter: ByteCountFormatter = {

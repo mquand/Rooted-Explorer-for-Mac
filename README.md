@@ -9,21 +9,25 @@ File manager mã nguồn mở cho macOS, viết bằng SwiftUI. Hiển thị c�
 - **Sidebar dạng cây:** Favorites (Home, Desktop, Documents, Downloads), volumes + dung lượng trống, cây thư mục load lười (chỉ đọc thư mục con khi mở rộng).
 - **Ba chế độ xem:** List (bảng), Icons (grid có thumbnail), Gallery (preview lớn + filmstrip).
 - **Thumbnail:** ảnh, PDF, video, audio và icon hệ thống cho mọi file.
-- **Điều hướng:** back/forward, lên thư mục cha, về Home, nhập đường dẫn trực tiếp trên thanh toolbar.
+- **Điều hướng:** back/forward, lên thư mục cha, về Home; thanh đường dẫn dạng breadcrumb (mỗi cấp bấm được), bấm nút bút chì hoặc `⇧⌘G` để gõ đường dẫn trực tiếp.
+- **Sắp xếp kiểu Explorer:** bấm tiêu đề cột để sắp xếp (Name/Size/Kind/Modified), bấm lần nữa để đảo chiều; thư mục luôn đứng trước file.
 - **Hành vi click:** mặc định click để chọn, double-click để mở thư mục/file; có thể bật *Open folders with a single click* trong Settings.
 - **Copy / Cut / Paste:** dùng clipboard chuẩn của Finder (`⌘C`, `⌘X`, `⌘V`), tự đổi tên khi trùng (`file copy.ext`).
-- **Thao tác file:** double-click mở, context menu, Rename, Duplicate, Move to Trash, New Folder, Reveal in Finder, Open in Terminal.
+- **Thao tác file:** double-click mở, context menu, Rename, Duplicate, Move to Trash, New Folder, Reveal in Finder, Open in Terminal, Open in IDE.
+- **Tags (Finder):** menu **Tags** trong context menu để gắn/bỏ 7 tag màu, chấm màu hiển thị cạnh tên file, mục **Tags** trong sidebar để tìm tất cả file gắn tag đó. Đúng định dạng metadata của Finder (`_kMDItemUserTags`) nên Finder thấy tag ngay.
+- **Quick Look:** bấm `Space` để xem trước file đang chọn (hỗ trợ nhiều file), `Space`/`Escape` để đóng.
+- **Tìm kiếm:** ô tìm kiếm trên toolbar (`⌘F`) — tìm theo tên (Spotlight `mdfind`, fallback `find`) hoặc theo nội dung (ripgrep/grep), đổi phạm vi bằng menu bên cạnh ô tìm kiếm.
 - **Tính dung lượng thư mục:** bấm *Calculate Size* trong context menu khi cần; app không tự quét toàn bộ thư mục nên không bị lag.
 - **Git:** hiển thị branch hiện tại và badge trạng thái từng file (modified, untracked, staged, conflict).
 - **Mở terminal/IDE:** Terminal, iTerm2, Warp, Ghostty; VS Code, Cursor, Xcode, WebStorm, IntelliJ.
-- **Tìm kiếm:** theo tên qua Spotlight (`mdfind`) hoặc `find`, theo nội dung qua ripgrep/grep.
-- **Phân tích dung lượng:** thông tin volume, kích thước thư mục, quét dev junk (`node_modules`, `.venv`, `__pycache__`, DerivedData...).
+- **Phân tích dung lượng:** nút *Analyze Storage* trên toolbar (hoặc từ menu chuột phải) mở sheet thống kê tổng dung lượng, thư mục con lớn nhất và quét rác dev (`node_modules`, `.venv`, DerivedData…); tính cả file ẩn.
+- **Status bar:** số mục, số mục đang chọn + tổng dung lượng, dung lượng trống của volume, branch git hiện tại.
 - **Tự động cập nhật:** kiểm tra GitHub Releases khi khởi động, tải và thay thế app khi chạy từ `/Applications`.
 
 ### Đang phát triển
 
 - Tab, dual-pane, kéo thả giữa các pane.
-- Quick Look (`Space`), undo/redo.
+- Undo/redo.
 - Command palette (`⌘K`), chmod/chown GUI.
 - File watcher (FSEvents), terminal nhúng, treemap dung lượng, workspaces.
 
@@ -37,7 +41,14 @@ File manager mã nguồn mở cho macOS, viết bằng SwiftUI. Hiển thị c�
 | `⌘[` / `⌘]` | Back / Forward |
 | `⌘↑` | Lên thư mục cha |
 | `⇧⌘H` | Về Home |
+| `⇧⌘G` | Gõ đường dẫn (Go to Folder) |
+| `⌘F` | Tìm kiếm trong thư mục hiện tại |
 | `⌘R` | Refresh |
+| `Space` | Quick Look (xem trước) |
+| `Enter` | Mở item đang chọn |
+| Phím mũi tên | Di chuyển lựa chọn (Icons/Gallery) |
+| Gõ chữ/số | Nhảy tới file bắt đầu bằng chữ đang gõ |
+| `Escape` | Thoát tìm kiếm / đóng Quick Look |
 | `⌘1` / `⌘2` / `⌘3` | List / Icons / Gallery |
 | `⇧⌘N` | Tạo thư mục mới |
 | `⌘,` | Settings |
@@ -56,22 +67,28 @@ Rooted/
 │   └── RootedApp.swift           # SwiftUI App entry point
 ├── Views/
 │   ├── ContentView.swift         # NavigationSplitView (sidebar + main)
-│   ├── SidebarView.swift         # Sidebar cây thư mục + favorites
-│   ├── FileListView.swift        # Toolbar, list/icons/gallery, thumbnail
-│   ├── FileItemActions.swift     # Context menu dùng chung
+│   ├── SidebarView.swift         # Sidebar: favorites, tags, volumes, cây thư mục
+│   ├── FileListView.swift        # Toolbar, bảng sort-by-header, icons, gallery, status bar
+│   ├── PathBar.swift             # Thanh đường dẫn breadcrumb + ô gõ path
+│   ├── SearchResultsView.swift   # Bảng kết quả tìm kiếm
+│   ├── StorageAnalysisSheet.swift # Sheet phân tích dung lượng + rác dev
+│   ├── FileItemActions.swift     # Context menu (mở, tag, IDE, thao tác file)
 │   ├── SettingsView.swift        # Settings (General / Updates / About)
 │   └── UpdateBanner.swift        # Banner báo bản cập nhật
 ├── ViewModels/
 │   ├── FileListViewModel.swift   # State file list, navigation, clipboard
 │   └── SidebarViewModel.swift    # Cây thư mục load lười
 ├── Models/
-│   ├── FileItem.swift            # File data model
+│   ├── FileItem.swift            # File data model (kèm tag Finder)
+│   ├── FinderTag.swift           # Tag màu Finder (7 tag chuẩn)
 │   └── AppSettings.swift         # Cài đặt lưu trong UserDefaults
 ├── Services/
-│   ├── GitService.swift          # Git status, branch, diff
+│   ├── GitService.swift          # Git status/branch (1 tiến trình, có cache)
 │   ├── TerminalService.swift     # Mở terminal/IDE
-│   ├── SearchService.swift       # Tìm file và nội dung
-│   ├── DiskUsageService.swift    # Dung lượng, dev junk
+│   ├── SearchService.swift       # Tìm theo tên / tag / nội dung (async)
+│   ├── DiskUsageService.swift    # Dung lượng thư mục, dev junk (hủy được)
+│   ├── TagService.swift          # Đọc/ghi tag Finder qua xattr
+│   ├── QuickLookController.swift # Quick Look (Space) qua QLPreviewPanel
 │   ├── FilePasteboard.swift      # Copy/cut/paste file
 │   ├── ThumbnailService.swift    # QuickLook thumbnail + cache
 │   └── UpdateService.swift       # GitHub Releases updater
@@ -81,7 +98,7 @@ Rooted/
 │   ├── icon-source.png           # Logo gốc (nền trong suốt)
 │   └── makeicon.py               # Sinh AppIcon.appiconset từ logo
 └── Utils/
-    └── Extensions.swift          # String, Date, Color, View extensions
+    └── Extensions.swift          # View extensions (double-click, if)
 ```
 
 ## Bắt đầu

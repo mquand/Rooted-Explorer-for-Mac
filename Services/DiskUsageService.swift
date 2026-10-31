@@ -1,13 +1,17 @@
 import Foundation
-import SwiftUI
 
-/// Service để phân tích dung lượng ổ đĩa và thư mục
-class DiskUsageService {
+/// Phân tích dung lượng volume, thư mục và quét "rác" dev (node_modules, .venv…).
+///
+/// Mọi hàm quét đều chạy nền và hủy được (`Task.checkCancellation()` giữa chừng),
+/// nên đóng sheet khi quét đang chạy sẽ dừng quét thật sự.
+final class DiskUsageService {
     static let shared = DiskUsageService()
-    
+
     private init() {}
-    
-    /// Lấy thông tin tất cả volumes đang mount (bao gồm cả ổ khởi động).
+
+    // MARK: - Volumes
+
+    /// Thông tin các volume đang mount (bao gồm ổ khởi động).
     func getAllVolumes() -> [VolumeInfo] {
         let keys: Set<URLResourceKey> = [
             .volumeNameKey,
@@ -46,84 +50,97 @@ class DiskUsageService {
             return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
         }
     }
-    
-    /// Lấy thông tin một volume
-    func getVolumeInfo(at path: String) -> VolumeInfo? {
-        let fm = FileManager.default
-        
-        guard let attributes = try? fm.attributesOfItem(atPath: path) else {
-            return nil
+
+    // MARK: - Dung lượng
+
+    /// Dung lượng thực tế trên đĩa của thư mục (kèm cả file ẩn như `.git`).
+    /// Dùng allocated size để khớp với số Finder hiển thị.
+    static func directorySize(at path: String) -> UInt64 {
+        let url = URL(fileURLWithPath: path, isDirectory: true)
+        let keys: Set<URLResourceKey> = [
+            .totalFileAllocatedSizeKey,
+            .fileAllocatedSizeKey,
+            .isRegularFileKey
+        ]
+
+        guard let enumerator = FileManager.default.enumerator(
+            at: url,
+            includingPropertiesForKeys: Array(keys),
+            options: [.skipsPackageDescendants],
+            errorHandler: nil
+        ) else {
+            return 0
         }
-        
-        let totalSpace = attributes[.systemSize] as? UInt64 ?? 0
-        let freeSpace = attributes[.systemFreeSize] as? UInt64 ?? 0
-        let usedSpace = totalSpace - freeSpace
-        
-        return VolumeInfo(
-            name: (path as NSString).lastPathComponent,
-            path: path,
-            totalSpace: totalSpace,
-            freeSpace: freeSpace,
-            usedSpace: usedSpace,
-            isMounted: true
-        )
-    }
-    
-    /// Phân tích dung lượng thư mục (đệ quy)
-    func analyzeDirectory(at path: String, completion: @escaping (DirectoryUsage) -> Void) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            let usage = self.calculateDirectoryUsage(at: path)
-            DispatchQueue.main.async {
-                completion(usage)
+
+        var total: UInt64 = 0
+        var visited = 0
+
+        for case let fileURL as URL in enumerator {
+            visited += 1
+            if visited.isMultiple(of: 4096) {
+                // withUnsafeCurrentTask dùng được trong hàm sync — an toàn hơn
+                // Task.isCancelled ở đây.
+                let cancelled = withUnsafeCurrentTask { $0?.isCancelled ?? false }
+                if cancelled { break }
             }
+
+            guard let values = try? fileURL.resourceValues(forKeys: keys),
+                  values.isRegularFile == true else {
+                continue
+            }
+            total += UInt64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0)
         }
+
+        return total
     }
-    
-    /// Tính dung lượng thư mục (đệ quy)
-    private func calculateDirectoryUsage(at path: String) -> DirectoryUsage {
-        let fm = FileManager.default
+
+    // MARK: - Phân tích thư mục
+
+    /// Phân tích đệ quy: tổng dung lượng, số file/thư mục và các thư mục con lớn nhất.
+    func analyzeDirectory(at path: String) async throws -> DirectoryUsage {
+        let task = Task.detached(priority: .userInitiated) {
+            try Self.calculateDirectoryUsage(at: path)
+        }
+        return try await withTaskCancellationHandler(operation: {
+            try await task.value
+        }, onCancel: {
+            task.cancel()
+        })
+    }
+
+    private static func calculateDirectoryUsage(at path: String) throws -> DirectoryUsage {
+        let fileManager = FileManager.default
         var totalSize: UInt64 = 0
         var fileCount = 0
         var folderCount = 0
         var subdirectories: [DirectoryUsage] = []
-        
-        guard let contents = try? fm.contentsOfDirectory(atPath: path) else {
-            return DirectoryUsage(
-                path: path,
-                name: (path as NSString).lastPathComponent,
-                size: 0,
-                fileCount: 0,
-                folderCount: 0,
-                subdirectories: []
-            )
-        }
-        
+
+        let contents = try fileManager.contentsOfDirectory(atPath: path)
+
         for item in contents {
-            if item == "." || item == ".." { continue }
-            
+            try Task.checkCancellation()
+
             let itemPath = (path as NSString).appendingPathComponent(item)
-            var isDir: ObjCBool = false
-            fm.fileExists(atPath: itemPath, isDirectory: &isDir)
-            
-            if isDir.boolValue {
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: itemPath, isDirectory: &isDirectory) else { continue }
+
+            if isDirectory.boolValue {
                 folderCount += 1
-                // Recursive analyze subdirectory
-                let subUsage = calculateDirectoryUsage(at: itemPath)
+                let subUsage = try Self.calculateDirectoryUsage(at: itemPath)
                 totalSize += subUsage.size
                 fileCount += subUsage.fileCount
                 folderCount += subUsage.folderCount
                 subdirectories.append(subUsage)
             } else {
                 fileCount += 1
-                if let attributes = try? fm.attributesOfItem(atPath: itemPath) {
+                if let attributes = try? fileManager.attributesOfItem(atPath: itemPath) {
                     totalSize += attributes[.size] as? UInt64 ?? 0
                 }
             }
         }
-        
-        // Sort subdirectories by size (descending)
+
         subdirectories.sort { $0.size > $1.size }
-        
+
         return DirectoryUsage(
             path: path,
             name: (path as NSString).lastPathComponent,
@@ -133,90 +150,72 @@ class DiskUsageService {
             subdirectories: subdirectories
         )
     }
-    
-    /// Quét các thư mục dev rác (node_modules, .venv, __pycache__, etc.)
-    func scanDevJunk(at basePath: String, completion: @escaping ([DevJunkItem]) -> Void) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            let junkItems = self.findDevJunk(at: basePath)
-            DispatchQueue.main.async {
-                completion(junkItems)
-            }
+
+    // MARK: - Dev junk
+
+    /// Quét các thư mục dev rác (node_modules, .venv, DerivedData…) trong `basePath`.
+    func scanDevJunk(at basePath: String) async throws -> [DevJunkItem] {
+        let task = Task.detached(priority: .userInitiated) {
+            try Self.findDevJunk(at: basePath)
         }
+        return try await withTaskCancellationHandler(operation: {
+            try await task.value
+        }, onCancel: {
+            task.cancel()
+        })
     }
-    
-    private func findDevJunk(at path: String) -> [DevJunkItem] {
+
+    private static let junkPatterns: Set<String> = [
+        "node_modules",
+        ".venv",
+        "venv",
+        "__pycache__",
+        ".pytest_cache",
+        ".mypy_cache",
+        "build",
+        "dist",
+        ".gradle",
+        "target",
+        "Pods",
+        "DerivedData"
+    ]
+
+    private static func findDevJunk(at path: String) throws -> [DevJunkItem] {
         var junkItems: [DevJunkItem] = []
-        let fm = FileManager.default
-        
-        let junkPatterns = [
-            "node_modules",
-            ".venv",
-            "venv",
-            "__pycache__",
-            ".pytest_cache",
-            ".mypy_cache",
-            "build",
-            "dist",
-            ".gradle",
-            "target",
-            "Pods",
-            "DerivedData"
-        ]
-        
-        func scanDirectory(_ currentPath: String) {
-            guard let contents = try? fm.contentsOfDirectory(atPath: currentPath) else { return }
-            
+        let fileManager = FileManager.default
+
+        func scan(_ currentPath: String) throws {
+            let contents = try fileManager.contentsOfDirectory(atPath: currentPath)
+
             for item in contents {
-                if item == "." || item == ".." { continue }
-                
+                try Task.checkCancellation()
+
                 let itemPath = (currentPath as NSString).appendingPathComponent(item)
-                var isDir: ObjCBool = false
-                fm.fileExists(atPath: itemPath, isDirectory: &isDir)
-                
-                if isDir.boolValue {
-                    if junkPatterns.contains(item) {
-                        if let size = getDirectorySize(at: itemPath) {
-                            junkItems.append(DevJunkItem(
-                                path: itemPath,
-                                name: item,
-                                type: junkType(for: item),
-                                size: size
-                            ))
-                        }
-                    } else {
-                        scanDirectory(itemPath)
-                    }
+                var isDirectory: ObjCBool = false
+                guard fileManager.fileExists(atPath: itemPath, isDirectory: &isDirectory),
+                      isDirectory.boolValue else {
+                    continue
+                }
+
+                if junkPatterns.contains(item) {
+                    junkItems.append(DevJunkItem(
+                        path: itemPath,
+                        name: item,
+                        type: junkType(for: item),
+                        size: directorySize(at: itemPath)
+                    ))
+                } else {
+                    try scan(itemPath)
                 }
             }
         }
-        
-        scanDirectory(path)
+
+        try scan(path)
+        junkItems.sort { $0.size > $1.size }
         return junkItems
     }
-    
-    private func getDirectorySize(at path: String) -> UInt64? {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/du")
-        task.arguments = ["-s", path]
-        
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = pipe
-        
-        do {
-            try task.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let output = String(data: data, encoding: .utf8) ?? ""
-            let parts = output.split(separator: "\t")
-            if let sizeStr = parts.first {
-                return UInt64(sizeStr.trimmingCharacters(in: .whitespaces)) ?? 0
-            }
-        } catch {}
-        
-        return nil
-    }
-    
-    private func junkType(for name: String) -> DevJunkType {
+
+    private static func junkType(for name: String) -> DevJunkType {
         switch name {
         case "node_modules": return .nodeModules
         case ".venv", "venv": return .pythonVenv
@@ -239,20 +238,20 @@ struct VolumeInfo: Identifiable {
     let freeSpace: UInt64
     let usedSpace: UInt64
     let isMounted: Bool
-    
+
     var usedPercentage: Double {
         guard totalSpace > 0 else { return 0 }
         return Double(usedSpace) / Double(totalSpace) * 100
     }
-    
+
     var formattedTotalSpace: String {
         ByteCountFormatter.string(fromByteCount: Int64(totalSpace), countStyle: .file)
     }
-    
+
     var formattedFreeSpace: String {
         ByteCountFormatter.string(fromByteCount: Int64(freeSpace), countStyle: .file)
     }
-    
+
     var formattedUsedSpace: String {
         ByteCountFormatter.string(fromByteCount: Int64(usedSpace), countStyle: .file)
     }
@@ -266,7 +265,7 @@ struct DirectoryUsage: Identifiable {
     let fileCount: Int
     let folderCount: Int
     let subdirectories: [DirectoryUsage]
-    
+
     var formattedSize: String {
         ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
     }
@@ -278,7 +277,7 @@ struct DevJunkItem: Identifiable {
     let name: String
     let type: DevJunkType
     let size: UInt64
-    
+
     var formattedSize: String {
         ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
     }
