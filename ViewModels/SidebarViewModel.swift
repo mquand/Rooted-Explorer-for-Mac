@@ -148,25 +148,23 @@ final class SidebarViewModel: ObservableObject {
     }
 
     private func updateNode(at path: String, transform: (inout DirectoryNode) -> Void) {
-        rootNodes = Self.mapNodes(rootNodes, path: path, transform: transform)
+        var nodes = rootNodes
+        Self.mapNodesInPlace(&nodes, path: path, transform: transform)
+        rootNodes = nodes
     }
 
-    nonisolated private static func mapNodes(
-        _ nodes: [DirectoryNode],
+    nonisolated private static func mapNodesInPlace(
+        _ nodes: inout [DirectoryNode],
         path: String,
         transform: (inout DirectoryNode) -> Void
-    ) -> [DirectoryNode] {
-        var result = nodes
-
-        for index in result.indices {
-            if result[index].path == path {
-                transform(&result[index])
-            } else if !result[index].children.isEmpty {
-                result[index].children = mapNodes(result[index].children, path: path, transform: transform)
+    ) {
+        for index in nodes.indices {
+            if nodes[index].path == path {
+                transform(&nodes[index])
+            } else if !nodes[index].children.isEmpty {
+                mapNodesInPlace(&nodes[index].children, path: path, transform: transform)
             }
         }
-
-        return result
     }
 
     private static let ignoredPaths: Set<String> = [

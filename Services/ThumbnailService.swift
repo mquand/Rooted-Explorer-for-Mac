@@ -54,22 +54,28 @@ final class ThumbnailService {
     }
 
     private func quickLookThumbnail(for path: String, size: CGFloat) async -> NSImage? {
-        await withCheckedContinuation { continuation in
-            let request = QLThumbnailGenerator.Request(
-                fileAt: URL(fileURLWithPath: path),
-                size: CGSize(width: size, height: size),
-                scale: NSScreen.main?.backingScaleFactor ?? 2,
-                representationTypes: .thumbnail
-            )
+        return await withTaskCancellationHandler(operation: {
+            await withCheckedContinuation { continuation in
+                let request = QLThumbnailGenerator.Request(
+                    fileAt: URL(fileURLWithPath: path),
+                    size: CGSize(width: size, height: size),
+                    scale: NSScreen.main?.backingScaleFactor ?? 2,
+                    representationTypes: .thumbnail
+                )
 
-            QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { representation, _ in
-                continuation.resume(returning: representation?.nsImage)
+                QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { representation, _ in
+                    continuation.resume(returning: representation?.nsImage)
+                }
             }
-        }
+        }, onCancel: {
+            // Cancel will be handled by withTaskCancellationHandler
+        })
     }
 
     private func key(for path: String, size: CGFloat) -> NSString {
-        "\(path)|\(Int(size))" as NSString
+        let attributes = try? FileManager.default.attributesOfItem(atPath: path)
+        let modDate = (attributes?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        return "\(path)|\(Int(size))|\(modDate)" as NSString
     }
 
     static func supportsPreview(_ path: String) -> Bool {

@@ -22,11 +22,47 @@ final class SearchService {
 
     private static let resultLimit = 500
 
+    private struct CachedResult {
+        let hits: [SearchHit]
+        let date: Date
+    }
+
+    private let cacheLock = NSLock()
+    private var cache: [String: CachedResult] = [:]
+    private let cacheLifetime: TimeInterval = 300 // 5 minutes
+
+    private func cacheKey(for query: String, scope: String, path: String) -> String {
+        "\(scope)|\(query)|\(path)"
+    }
+
+    private func getCachedResult(key: String) -> [SearchHit]? {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+
+        guard let cached = cache[key],
+              Date().timeIntervalSince(cached.date) < cacheLifetime else {
+            cache.removeValue(forKey: key)
+            return nil
+        }
+        return cached.hits
+    }
+
+    private func setCachedResult(key: String, hits: [SearchHit]) {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        cache[key] = CachedResult(hits: hits, date: Date())
+    }
+
     // MARK: - Tìm theo tên
 
     func searchByName(_ query: String, in path: String) async -> [SearchHit] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
+
+        let key = cacheKey(for: trimmed, scope: "name", path: path)
+        if let cached = getCachedResult(key: key) {
+            return cached
+        }
 
         var paths: [String] = []
 
@@ -49,13 +85,21 @@ final class SearchService {
             }
         }
 
-        return await filesToHits(Array(paths.prefix(Self.resultLimit)))
+        let hits = await filesToHits(Array(paths.prefix(Self.resultLimit)))
+        setCachedResult(key: key, hits: hits)
+        return hits
     }
 
     // MARK: - Tìm theo tag
 
     func searchByTag(_ tag: FinderTag, in path: String) async -> [SearchHit] {
         let query = "kMDItemUserTags == '\(Self.sanitize(tag.name))'c"
+        let key = cacheKey(for: tag.name, scope: "tag", path: path)
+
+        if let cached = getCachedResult(key: key) {
+            return cached
+        }
+
         guard let output = await Self.run(
             "/usr/bin/mdfind",
             ["-onlyin", path, query],
@@ -65,7 +109,9 @@ final class SearchService {
         }
 
         let paths = Self.lines(output)
-        return await filesToHits(Array(paths.prefix(Self.resultLimit)))
+        let hits = await filesToHits(Array(paths.prefix(Self.resultLimit)))
+        setCachedResult(key: key, hits: hits)
+        return hits
     }
 
     // MARK: - Tìm nội dung
@@ -73,6 +119,11 @@ final class SearchService {
     func searchContent(_ query: String, in path: String) async -> [SearchHit] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
+
+        let key = cacheKey(for: trimmed, scope: "content", path: path)
+        if let cached = getCachedResult(key: key) {
+            return cached
+        }
 
         let arguments = ["--line-number", "--no-heading", "--color=never", "--max-columns=300", "-e", trimmed, path]
 
@@ -90,7 +141,9 @@ final class SearchService {
         }
 
         guard let output else { return [] }
-        return await matchToHits(Self.parseMatches(output))
+        let hits = await matchToHits(Self.parseMatches(output))
+        setCachedResult(key: key, hits: hits)
+        return hits
     }
 
     // MARK: - Helpers
@@ -98,8 +151,8 @@ final class SearchService {
     private func filesToHits(_ paths: [String]) async -> [SearchHit] {
         guard !paths.isEmpty else { return [] }
 
-        let items: [FileItem] = await Task.detached(priority: .userInitiated) {
-            paths.compactMap { FileItem.from(path: $0) }
+        let items = await Task.detached(priority: .userInitiated) {
+            FileItem.fromPaths(paths)
         }.value
 
         return items.map { SearchHit(file: $0, line: nil, text: nil) }
@@ -110,8 +163,8 @@ final class SearchService {
 
         let grouped = Dictionary(grouping: matches, by: \.path)
 
-        let items: [FileItem] = await Task.detached(priority: .userInitiated) {
-            grouped.keys.compactMap { FileItem.from(path: $0) }
+        let items = await Task.detached(priority: .userInitiated) {
+            FileItem.fromPaths(Array(grouped.keys))
         }.value
 
         return items.map { item in

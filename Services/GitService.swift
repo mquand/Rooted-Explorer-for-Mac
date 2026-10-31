@@ -25,7 +25,7 @@ final class GitService {
 
     private let lock = NSLock()
     private var cache: [String: Snapshot] = [:]
-    private let cacheLifetime: TimeInterval = 3
+    private let cacheLifetime: TimeInterval = 30
 
     /// Trạng thái git cho thư mục `path`. Trả về rỗng nếu không nằm trong repo.
     /// - Parameter useCache: tắt cache khi người dùng bấm Refresh.

@@ -682,9 +682,7 @@ class FileListViewModel: ObservableObject {
 
         let path = item.path
         Task {
-            let size = await Task.detached(priority: .utility) {
-                DiskUsageService.directorySize(at: path)
-            }.value
+            let size = await DiskUsageService.directorySize(at: path)
             self.folderSizes[path] = size
         }
     }

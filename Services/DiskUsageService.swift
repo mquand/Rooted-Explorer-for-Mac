@@ -55,7 +55,18 @@ final class DiskUsageService {
 
     /// Dung lượng thực tế trên đĩa của thư mục (kèm cả file ẩn như `.git`).
     /// Dùng allocated size để khớp với số Finder hiển thị.
-    static func directorySize(at path: String) -> UInt64 {
+    static func directorySize(at path: String) async -> UInt64 {
+        let task = Task.detached(priority: .userInitiated) {
+            Self.calculateDirectorySize(at: path)
+        }
+        return await withTaskCancellationHandler(operation: {
+            await task.value
+        }, onCancel: {
+            task.cancel()
+        })
+    }
+
+    private static func calculateDirectorySize(at path: String) -> UInt64 {
         let url = URL(fileURLWithPath: path, isDirectory: true)
         let keys: Set<URLResourceKey> = [
             .totalFileAllocatedSizeKey,
@@ -78,8 +89,7 @@ final class DiskUsageService {
         for case let fileURL as URL in enumerator {
             visited += 1
             if visited.isMultiple(of: 4096) {
-                // withUnsafeCurrentTask dùng được trong hàm sync — an toàn hơn
-                // Task.isCancelled ở đây.
+                // Check cancellation mỗi 4096 file
                 let cancelled = withUnsafeCurrentTask { $0?.isCancelled ?? false }
                 if cancelled { break }
             }
@@ -155,13 +165,10 @@ final class DiskUsageService {
 
     /// Quét các thư mục dev rác (node_modules, .venv, DerivedData…) trong `basePath`.
     func scanDevJunk(at basePath: String) async throws -> [DevJunkItem] {
-        let task = Task.detached(priority: .userInitiated) {
-            try Self.findDevJunk(at: basePath)
-        }
         return try await withTaskCancellationHandler(operation: {
-            try await task.value
+            try await Self.findDevJunk(at: basePath)
         }, onCancel: {
-            task.cancel()
+            // Task tự hủy bởi withTaskCancellationHandler
         })
     }
 
@@ -180,11 +187,11 @@ final class DiskUsageService {
         "DerivedData"
     ]
 
-    private static func findDevJunk(at path: String) throws -> [DevJunkItem] {
+    private static func findDevJunk(at path: String) async throws -> [DevJunkItem] {
         var junkItems: [DevJunkItem] = []
         let fileManager = FileManager.default
 
-        func scan(_ currentPath: String) throws {
+        func scan(_ currentPath: String) async throws {
             let contents = try fileManager.contentsOfDirectory(atPath: currentPath)
 
             for item in contents {
@@ -198,19 +205,20 @@ final class DiskUsageService {
                 }
 
                 if junkPatterns.contains(item) {
+                    let size = await directorySize(at: itemPath)
                     junkItems.append(DevJunkItem(
                         path: itemPath,
                         name: item,
                         type: junkType(for: item),
-                        size: directorySize(at: itemPath)
+                        size: size
                     ))
                 } else {
-                    try scan(itemPath)
+                    try await scan(itemPath)
                 }
             }
         }
 
-        try scan(path)
+        try await scan(path)
         junkItems.sort { $0.size > $1.size }
         return junkItems
     }
