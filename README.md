@@ -56,8 +56,8 @@ File manager mã nguồn mở cho macOS, viết bằng SwiftUI. Hiển thị c�
 ## Yêu cầu
 
 - macOS 13.0+
-- Xcode 15.0+
-- Swift 5.9+
+- Xcode 16.0+
+- Swift 6.0+ (Full Swift 6 Concurrency support)
 
 ## Cấu trúc dự án
 
@@ -136,8 +136,8 @@ Mỗi lần push hoặc mở pull request, GitHub Actions sẽ build app trên m
 Để tạo release, push một tag:
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 Workflow sẽ build, đóng gói và tạo GitHub Release kèm `.zip` + `.dmg`. Bản build dùng **ad-hoc signing**, chưa notarize, nên sau khi tải về cần chuột phải → **Open** hoặc chạy `xattr -dr com.apple.quarantine /Applications/Rooted.app`.
