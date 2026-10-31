@@ -54,8 +54,8 @@ final class ThumbnailService {
     }
 
     private func quickLookThumbnail(for path: String, size: CGFloat) async -> NSImage? {
-        return await withTaskCancellationHandler(operation: {
-            await withCheckedContinuation { continuation in
+        let cgImage = await withTaskCancellationHandler(operation: {
+            await withCheckedContinuation { (continuation: CheckedContinuation<CGImage?, Never>) in
                 let request = QLThumbnailGenerator.Request(
                     fileAt: URL(fileURLWithPath: path),
                     size: CGSize(width: size, height: size),
@@ -64,12 +64,15 @@ final class ThumbnailService {
                 )
 
                 QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { representation, _ in
-                    continuation.resume(returning: representation?.nsImage)
+                    continuation.resume(returning: representation?.cgImage)
                 }
             }
         }, onCancel: {
             // Cancel will be handled by withTaskCancellationHandler
         })
+
+        guard let cgImage else { return nil }
+        return NSImage(cgImage: cgImage, size: CGSize(width: size, height: size))
     }
 
     private func key(for path: String, size: CGFloat) -> NSString {
