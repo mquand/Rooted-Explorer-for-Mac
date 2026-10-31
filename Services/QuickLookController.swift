@@ -10,7 +10,7 @@ import QuickLookUI
 final class QuickLookController: NSObject, @preconcurrency QLPreviewPanelDataSource, @preconcurrency QLPreviewPanelDelegate {
     static let shared = QuickLookController()
 
-    private var items: [URL] = []
+    nonisolated(unsafe) private var items: [URL] = []
 
     private override init() {
         super.init()
@@ -47,16 +47,12 @@ final class QuickLookController: NSObject, @preconcurrency QLPreviewPanelDataSou
     // MARK: - QLPreviewPanelDataSource
 
     nonisolated func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int {
-        MainActor.assumeIsolated {
-            items.count
-        }
+        items.count
     }
 
     nonisolated func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! {
-        MainActor.assumeIsolated {
-            guard items.indices.contains(index) else { return nil }
-            return items[index] as NSURL
-        }
+        guard items.indices.contains(index) else { return nil }
+        return items[index] as NSURL
     }
 
     // MARK: - QLPreviewPanelDelegate
@@ -67,7 +63,7 @@ final class QuickLookController: NSObject, @preconcurrency QLPreviewPanelDataSou
 
         if event.keyCode == 53 || event.keyCode == 49 {
             MainActor.assumeIsolated {
-                hide()
+                QuickLookController.shared.hide()
             }
             return true
         }
