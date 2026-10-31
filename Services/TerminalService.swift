@@ -2,8 +2,8 @@ import Foundation
 import SwiftUI
 
 /// Service để mở terminal và IDE
-class TerminalService: Sendable {
-    nonisolated(unsafe) static let shared = TerminalService()
+class TerminalService: @unchecked Sendable {
+    static let shared = TerminalService()
     
     private init() {}
     

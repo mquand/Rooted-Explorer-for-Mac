@@ -15,8 +15,8 @@ struct SearchHit: Identifiable, Hashable {
 /// Spotlight (`mdfind`) cho tên/tag, ripgrep hoặc grep cho nội dung.
 ///
 /// Mọi tiến trình đều chạy nền; kết quả cũ bị loại bằng generation ở ViewModel.
-final class SearchService: Sendable {
-    nonisolated(unsafe) static let shared = SearchService()
+final class SearchService: @unchecked Sendable {
+    static let shared = SearchService()
 
     private init() {}
 

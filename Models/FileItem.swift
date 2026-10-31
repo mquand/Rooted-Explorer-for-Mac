@@ -99,14 +99,14 @@ struct FileItem: Identifiable, Hashable {
         return type.localizedDescription ?? ext.uppercased()
     }
 
-    private nonisolated(unsafe) static let byteFormatter: ByteCountFormatter = {
+    private static let byteFormatter: ByteCountFormatter = {
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useKB, .useMB, .useGB]
         formatter.countStyle = .file
         return formatter
     }()
 
-    private nonisolated(unsafe) static let dateFormatter: DateFormatter = {
+    private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
         formatter.timeStyle = .short

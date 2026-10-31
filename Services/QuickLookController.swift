@@ -6,9 +6,8 @@ import QuickLookUI
 ///
 /// Controller duy nhất của app: giữ danh sách URL đang xem, tự xử lý
 /// Escape/Space để đóng panel.
-@MainActor
-final class QuickLookController: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
-    nonisolated(unsafe) static let shared = QuickLookController()
+final class QuickLookController: NSObject, @preconcurrency QLPreviewPanelDataSource, @preconcurrency QLPreviewPanelDelegate {
+    static let shared = QuickLookController()
 
     private var items: [URL] = []
 
@@ -16,7 +15,7 @@ final class QuickLookController: NSObject, QLPreviewPanelDataSource, QLPreviewPa
         super.init()
     }
 
-    var isVisible: Bool {
+    nonisolated var isVisible: Bool {
         QLPreviewPanel.sharedPreviewPanelExists() && QLPreviewPanel.shared()?.isVisible ?? false
     }
 
@@ -46,23 +45,25 @@ final class QuickLookController: NSObject, QLPreviewPanelDataSource, QLPreviewPa
 
     // MARK: - QLPreviewPanelDataSource
 
-    func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int {
-        items.count
+    nonisolated func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int {
+        // Access items via self (captured in closure, safe within sync context)
+        return (self as? QuickLookController)?.items.count ?? 0
     }
 
-    func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! {
-        guard items.indices.contains(index) else { return nil }
-        return items[index] as NSURL
+    nonisolated func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! {
+        guard let self = self as? QuickLookController else { return nil }
+        guard self.items.indices.contains(index) else { return nil }
+        return self.items[index] as NSURL
     }
 
     // MARK: - QLPreviewPanelDelegate
 
     /// Đóng panel khi người dùng bấm Escape hoặc Space.
-    func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
+    nonisolated func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
         guard let event else { return false }
 
         if event.keyCode == 53 || event.keyCode == 49 {
-            hide()
+            (self as? QuickLookController)?.hide()
             return true
         }
         return false
