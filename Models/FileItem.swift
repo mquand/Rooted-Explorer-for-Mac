@@ -41,9 +41,9 @@ struct FileItem: Identifiable, Hashable {
         )
     }
 
-    /// Tạo nhiều FileItem từ nhiều paths song song (dùng cho search performance).
+    /// Tạo nhiều FileItem từ nhiều paths (dùng cho search performance).
     static func fromPaths(_ paths: [String]) -> [FileItem] {
-        return paths.concurrentMap { from(path: $0) }.compactMap { $0 }
+        return paths.compactMap { from(path: $0) }
     }
 
     var icon: String {

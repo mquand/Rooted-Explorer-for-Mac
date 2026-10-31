@@ -151,7 +151,7 @@ final class SearchService {
     private func filesToHits(_ paths: [String]) async -> [SearchHit] {
         guard !paths.isEmpty else { return [] }
 
-        let items = await Task.detached(priority: .userInitiated) {
+        let items: [FileItem] = await Task.detached(priority: .userInitiated) {
             FileItem.fromPaths(paths)
         }.value
 
