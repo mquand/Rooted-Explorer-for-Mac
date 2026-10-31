@@ -50,6 +50,11 @@ struct FileItemActions: View {
                 viewModel.trashSelectedItems()
             }
 
+            Button("Delete Immediately…") {
+                viewModel.ensureSelected(file.path)
+                viewModel.requestDeleteImmediately()
+            }
+
             Divider()
 
             tagsMenu

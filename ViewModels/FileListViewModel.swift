@@ -3,6 +3,30 @@ import SwiftUI
 import Combine
 import AppKit
 
+enum FileFilterMode: String, CaseIterable, Identifiable {
+    case all = "All"
+    case folders = "Folders"
+    case files = "Files"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .all: return "square.grid.2x2"
+        case .folders: return "folder"
+        case .files: return "doc"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .all: return "Tất cả"
+        case .folders: return "Chỉ thư mục"
+        case .files: return "Chỉ tệp tin"
+        }
+    }
+}
+
 /// ViewModel quản lý state cho danh sách file: điều hướng, sort, chọn,
 /// clipboard, tag, tìm kiếm và tính dung lượng.
 @MainActor
@@ -10,11 +34,24 @@ class FileListViewModel: ObservableObject {
     @Published var currentPath: String
     @Published var pathInput: String
     @Published var files: [FileItem] = []
+    @Published var filterMode: FileFilterMode = .all
     @Published var selectedItems: Set<String> = []
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
     @Published var gitBranch: String?
     @Published var folderSizes: [String: UInt64] = [:]
+    @Published var showDeleteImmediatelyConfirm: Bool = false
+
+    var displayedFiles: [FileItem] {
+        switch filterMode {
+        case .all:
+            return files
+        case .folders:
+            return files.filter { $0.isDirectory }
+        case .files:
+            return files.filter { !$0.isDirectory }
+        }
+    }
 
     /// Sắp xếp hiện tại — bind trực tiếp với `sortOrder` của Table nên header
     /// cột bấm là sắp xếp (kiểu Windows Explorer).
@@ -353,28 +390,28 @@ class FileListViewModel: ObservableObject {
 
     func selectRange(to path: String) {
         guard let anchor = lastSelectedPath,
-              let start = files.firstIndex(where: { $0.path == anchor }),
-              let end = files.firstIndex(where: { $0.path == path }) else {
+              let start = displayedFiles.firstIndex(where: { $0.path == anchor }),
+              let end = displayedFiles.firstIndex(where: { $0.path == path }) else {
             selectOnly(path)
             return
         }
 
         let range = start <= end ? start...end : end...start
-        selectedItems = Set(files[range].map(\.path))
+        selectedItems = Set(displayedFiles[range].map(\.path))
     }
 
     /// Chọn item kế tiếp/trước đó theo thứ tự hiển thị (dùng cho phím mũi tên).
     func moveSelection(by offset: Int) {
-        guard !files.isEmpty else { return }
+        guard !displayedFiles.isEmpty else { return }
 
         guard let currentPath = selectedItems.first,
-              let index = files.firstIndex(where: { $0.path == currentPath }) else {
-            selectOnly(files[min(max(0, offset - 1), files.count - 1)].path)
+              let index = displayedFiles.firstIndex(where: { $0.path == currentPath }) else {
+            selectOnly(displayedFiles[min(max(0, offset - 1), displayedFiles.count - 1)].path)
             return
         }
 
-        let target = min(max(index + offset, 0), files.count - 1)
-        selectOnly(files[target].path)
+        let target = min(max(index + offset, 0), displayedFiles.count - 1)
+        selectOnly(displayedFiles[target].path)
     }
 
     func selectByTyping(_ character: String) {
@@ -383,25 +420,67 @@ class FileListViewModel: ObservableObject {
         typeAheadDate = now
 
         let query = typeAhead.lowercased()
-        if let match = files.first(where: { $0.name.lowercased().hasPrefix(query) }) {
+        if let match = displayedFiles.first(where: { $0.name.lowercased().hasPrefix(query) }) {
             selectOnly(match.path)
             return
         }
 
         // Chuỗi gõ nối tiếp không khớp — quay lại với đúng ký tự vừa gõ.
         typeAhead = character
-        if let match = files.first(where: { $0.name.lowercased().hasPrefix(character) }) {
+        if let match = displayedFiles.first(where: { $0.name.lowercased().hasPrefix(character) }) {
             selectOnly(match.path)
         }
     }
 
     func selectAll() {
-        selectedItems = Set(files.map(\.path))
+        selectedItems = Set(displayedFiles.map(\.path))
+    }
+
+    func selectAllFolders() {
+        selectedItems = Set(displayedFiles.filter { $0.isDirectory }.map(\.path))
+    }
+
+    func selectAllFiles() {
+        selectedItems = Set(displayedFiles.filter { !$0.isDirectory }.map(\.path))
+    }
+
+    func invertSelection() {
+        let current = selectedItems
+        let all = Set(displayedFiles.map(\.path))
+        selectedItems = all.subtracting(current)
     }
 
     func deselectAll() {
         selectedItems.removeAll()
         lastSelectedPath = nil
+    }
+
+    func requestDeleteImmediately() {
+        guard !selectedItems.isEmpty else { return }
+        showDeleteImmediatelyConfirm = true
+    }
+
+    func deleteImmediatelySelectedItems() {
+        guard !selectedItems.isEmpty else { return }
+        let targets = Array(selectedItems)
+        var failures = 0
+        let fileManager = FileManager.default
+
+        for path in targets {
+            do {
+                try fileManager.removeItem(atPath: path)
+            } catch {
+                failures += 1
+            }
+        }
+
+        if failures > 0 {
+            errorMessage = "Không thể xoá \(failures) mục."
+        }
+
+        selectedItems.removeAll()
+        lastSelectedPath = nil
+        loadFiles()
     }
 
     // MARK: - Clipboard

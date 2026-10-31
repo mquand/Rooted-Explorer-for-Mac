@@ -57,10 +57,32 @@ struct AppCommands: Commands {
             .keyboardShortcut("a")
             .disabled(viewModel == nil)
 
+            Button("Deselect All") {
+                viewModel?.deselectAll()
+            }
+            .keyboardShortcut("d")
+            .disabled(!hasSelection)
+
+            Button("Select All Folders") {
+                viewModel?.selectAllFolders()
+            }
+            .disabled(viewModel == nil)
+
+            Button("Select All Files") {
+                viewModel?.selectAllFiles()
+            }
+            .disabled(viewModel == nil)
+
             Button("Move to Trash") {
                 viewModel?.trashSelectedItems()
             }
             .keyboardShortcut(.delete, modifiers: [.command])
+            .disabled(!hasSelection)
+
+            Button("Delete Immediately…") {
+                viewModel?.requestDeleteImmediately()
+            }
+            .keyboardShortcut(.delete, modifiers: [.command, .option])
             .disabled(!hasSelection)
         }
 

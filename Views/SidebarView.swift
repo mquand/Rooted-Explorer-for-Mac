@@ -30,6 +30,11 @@ struct SidebarView: View {
                 name: "Downloads",
                 path: (home as NSString).appendingPathComponent("Downloads"),
                 icon: "arrow.down.circle"
+            ),
+            FavoriteLocation(
+                name: "Applications",
+                path: "/Applications",
+                icon: "app.badge"
             )
         ]
 
@@ -43,6 +48,48 @@ struct SidebarView: View {
             Section("Favorites") {
                 ForEach(favorites) { item in
                     sidebarRow(name: item.name, path: item.path, icon: item.icon)
+                }
+            }
+
+            Section("Volumes") {
+                ForEach(viewModel.volumes) { volume in
+                    HStack {
+                        Image(systemName: "externaldrive.fill")
+                        Text(volume.name)
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(volume.formattedFreeSpace)
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+
+                        if volume.path != "/" {
+                            Button {
+                                viewModel.ejectVolume(at: volume.path)
+                            } label: {
+                                Image(systemName: "eject")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Eject volume")
+                        }
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        fileListViewModel.navigateTo(path: volume.path)
+                    }
+                    .listRowBackground(rowBackground(for: volume.path))
+                }
+            }
+
+            Section("Folders") {
+                ForEach(viewModel.rootNodes) { node in
+                    DirectoryTreeRow(
+                        node: node,
+                        selectedPath: selectedPath,
+                        sidebarViewModel: viewModel,
+                        onSelect: { fileListViewModel.navigateTo(path: $0) }
+                    )
                 }
             }
 
@@ -61,36 +108,6 @@ struct SidebarView: View {
                         fileListViewModel.startTagSearch(tag)
                     }
                     .help("Tìm tất cả file gắn tag này")
-                }
-            }
-
-            Section("Volumes") {
-                ForEach(viewModel.volumes) { volume in
-                    HStack {
-                        Image(systemName: "externaldrive.fill")
-                        Text(volume.name)
-                            .lineLimit(1)
-                        Spacer(minLength: 4)
-                        Text(volume.formattedFreeSpace)
-                            .foregroundColor(.secondary)
-                            .font(.caption)
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        fileListViewModel.navigateTo(path: volume.path)
-                    }
-                    .listRowBackground(rowBackground(for: volume.path))
-                }
-            }
-
-            Section("Root") {
-                ForEach(viewModel.rootNodes) { node in
-                    DirectoryTreeRow(
-                        node: node,
-                        selectedPath: selectedPath,
-                        sidebarViewModel: viewModel,
-                        onSelect: { fileListViewModel.navigateTo(path: $0) }
-                    )
                 }
             }
         }

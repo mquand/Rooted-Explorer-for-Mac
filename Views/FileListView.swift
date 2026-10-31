@@ -12,6 +12,7 @@ struct FileListView: View {
     @State private var renameName = ""
     @State private var showAnalysis = false
     @State private var keyMonitor: Any?
+    @State private var mouseMonitor: Any?
     @FocusState private var isSearchFocused: Bool
 
     var body: some View {
@@ -36,6 +37,17 @@ struct FileListView: View {
         } message: {
             Text("Enter a new name for this item.")
         }
+        .alert("Delete Immediately", isPresented: $viewModel.showDeleteImmediatelyConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete Immediately", role: .destructive) {
+                viewModel.deleteImmediatelySelectedItems()
+            }
+        } message: {
+            let count = viewModel.selectedItems.count
+            Text(count == 1
+                ? "This item will be deleted immediately. You can't undo this action."
+                : "\(count) items will be deleted immediately. You can't undo this action.")
+        }
         .sheet(isPresented: $showAnalysis) {
             StorageAnalysisSheet(path: viewModel.currentPath)
         }
@@ -44,8 +56,8 @@ struct FileListView: View {
             viewModel.focusSearchField = false
             isSearchFocused = true
         }
-        .onAppear { installKeyMonitor() }
-        .onDisappear { removeKeyMonitor() }
+        .onAppear { installMonitors() }
+        .onDisappear { removeMonitors() }
     }
 
     // MARK: - Top bar
@@ -95,9 +107,47 @@ struct FileListView: View {
                 .labelsHidden()
                 .frame(width: 118)
 
+                Menu {
+                    Picker("Lọc", selection: $viewModel.filterMode) {
+                        ForEach(FileFilterMode.allCases) { mode in
+                            Label(mode.title, systemImage: mode.icon)
+                                .tag(mode)
+                        }
+                    }
+
+                    Divider()
+
+                    Button("Chọn tất cả thư mục") {
+                        viewModel.selectAllFolders()
+                    }
+
+                    Button("Chọn tất cả tệp tin") {
+                        viewModel.selectAllFiles()
+                    }
+
+                    Button("Đảo ngược vùng chọn") {
+                        viewModel.invertSelection()
+                    }
+
+                    Button("Bỏ chọn tất cả (Esc)") {
+                        viewModel.deselectAll()
+                    }
+                    .disabled(viewModel.selectedItems.isEmpty)
+                } label: {
+                    Image(systemName: viewModel.filterMode == .all ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                        .foregroundColor(viewModel.filterMode == .all ? .secondary : .accentColor)
+                }
+                .menuStyle(.borderlessButton)
+                .help("Lọc & Chọn: \(viewModel.filterMode.title)")
+
                 navButton(settings.showHiddenFiles ? "eye" : "eye.slash", help: "Show Hidden Files") {
                     settings.showHiddenFiles.toggle()
                 }
+
+                navButton("trash", help: "Move to Trash (⌘⌫)") {
+                    viewModel.trashSelectedItems()
+                }
+                .disabled(viewModel.selectedItems.isEmpty)
 
                 navButton("terminal", help: "Open in Terminal") {
                     TerminalService.shared.openTerminal(at: viewModel.currentPath)
@@ -211,11 +261,20 @@ struct FileListView: View {
             }
             .padding()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if viewModel.files.isEmpty {
-            Text("Folder is empty")
-                .foregroundColor(.secondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contextMenu { backgroundMenu }
+        } else if viewModel.displayedFiles.isEmpty {
+            VStack(spacing: 8) {
+                Image(systemName: viewModel.filterMode == .all ? "folder" : viewModel.filterMode.icon)
+                    .font(.system(size: 40))
+                    .foregroundColor(.secondary)
+                Text(viewModel.filterMode == .all ? "Folder is empty" : "No \(viewModel.filterMode.rawValue.lowercased()) in this folder")
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                viewModel.deselectAll()
+            }
+            .contextMenu { backgroundMenu }
         } else {
             switch settings.viewMode {
             case .list:
@@ -231,7 +290,7 @@ struct FileListView: View {
     // MARK: - List
 
     private var listView: some View {
-        Table(viewModel.files, selection: $viewModel.selectedItems, sortOrder: $viewModel.sortOrder) {
+        Table(viewModel.displayedFiles, selection: $viewModel.selectedItems, sortOrder: $viewModel.sortOrder) {
             TableColumn("Name", value: \.name) { file in
                 tableCell(for: file) {
                     HStack(spacing: 6) {
@@ -308,43 +367,59 @@ struct FileListView: View {
 
     private var iconsView: some View {
         ScrollView {
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: settings.iconSize + 44), spacing: 14)],
-                spacing: 18
-            ) {
-                ForEach(viewModel.files) { file in
-                    VStack(spacing: 6) {
-                        FileThumbnail(file: file, size: settings.iconSize)
-                            .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+            VStack(spacing: 0) {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: settings.iconSize + 44), spacing: 14)],
+                    spacing: 18
+                ) {
+                    ForEach(viewModel.displayedFiles) { file in
+                        VStack(spacing: 6) {
+                            FileThumbnail(file: file, size: settings.iconSize)
+                                .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
 
-                        Text(file.name)
-                            .font(.caption)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .foregroundColor(file.isHidden ? .secondary : .primary)
+                            Text(file.name)
+                                .font(.caption)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                                .foregroundColor(file.isHidden ? .secondary : .primary)
 
-                        TagDots(tags: file.tags)
-                    }
-                    .padding(8)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 9)
-                            .fill(isSelected(file) ? Color.accentColor.opacity(0.18) : Color.clear)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 9)
-                            .stroke(isSelected(file) ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1)
-                    )
-                    .contentShape(Rectangle())
-                    .onTapGesture { handleGridTap(file) }
-                    .onDoubleClick { viewModel.openItem(file) }
-                    .contextMenu {
-                        FileItemActions(viewModel: viewModel, file: file, onRename: beginRename)
+                            TagDots(tags: file.tags)
+                        }
+                        .padding(8)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 9)
+                                .fill(isSelected(file) ? Color.accentColor.opacity(0.18) : Color.clear)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 9)
+                                .stroke(isSelected(file) ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1)
+                        )
+                        .contentShape(Rectangle())
+                        .onTapGesture { handleGridTap(file) }
+                        .onDoubleClick { viewModel.openItem(file) }
+                        .contextMenu {
+                            FileItemActions(viewModel: viewModel, file: file, onRename: beginRename)
+                        }
                     }
                 }
+                .padding(16)
+
+                Color.clear
+                    .frame(maxWidth: .infinity, minHeight: 120)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        viewModel.deselectAll()
+                    }
             }
-            .padding(16)
         }
+        .background(
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    viewModel.deselectAll()
+                }
+        )
         .contextMenu { backgroundMenu }
     }
 
@@ -367,12 +442,16 @@ struct FileListView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(nsColor: .textBackgroundColor).opacity(0.35))
+            .contentShape(Rectangle())
+            .onTapGesture {
+                viewModel.deselectAll()
+            }
 
             Divider()
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 8) {
-                    ForEach(viewModel.files) { file in
+                    ForEach(viewModel.displayedFiles) { file in
                         VStack(spacing: 4) {
                             FileThumbnail(file: file, size: 54)
                             Text(file.name)
@@ -408,6 +487,8 @@ struct FileListView: View {
         HStack(spacing: 16) {
             if viewModel.isSearchActive {
                 Text("\(viewModel.searchHits.count) results")
+            } else if viewModel.filterMode != .all {
+                Text("\(viewModel.displayedFiles.count) of \(viewModel.files.count) items (\(viewModel.filterMode.title))")
             } else {
                 Text("\(viewModel.files.count) items")
             }
@@ -436,6 +517,10 @@ struct FileListView: View {
         .padding(.vertical, 5)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(nsColor: .windowBackgroundColor))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            viewModel.deselectAll()
+        }
     }
 
     private var selectionSizeText: String? {
@@ -501,15 +586,42 @@ struct FileListView: View {
 
         Divider()
 
-        Button("Select All") {
-            viewModel.selectAll()
+        Menu("Selection") {
+            Button("Select All (⌘A)") {
+                viewModel.selectAll()
+            }
+            Button("Select All Folders") {
+                viewModel.selectAllFolders()
+            }
+            Button("Select All Files") {
+                viewModel.selectAllFiles()
+            }
+            Button("Invert Selection") {
+                viewModel.invertSelection()
+            }
+            Button("Deselect All (Esc)") {
+                viewModel.deselectAll()
+            }
+            .disabled(viewModel.selectedItems.isEmpty)
         }
+
+        if !viewModel.selectedItems.isEmpty {
+            Divider()
+
+            Button("Move to Trash (⌘⌫)") {
+                viewModel.trashSelectedItems()
+            }
+
+            Button("Delete Immediately… (⌥⌘⌫)") {
+                viewModel.requestDeleteImmediately()
+            }
+        }
+
+        Divider()
 
         Button("Refresh") {
             viewModel.refresh()
         }
-
-        Divider()
 
         Button("Analyze Storage…") {
             showAnalysis = true
@@ -530,21 +642,55 @@ struct FileListView: View {
         }
     }
 
-    // MARK: - Bàn phím (Space, phím mũi tên, gõ để chọn)
+    // MARK: - Bàn phím & Chuột (Deselect khi click ngoài, Space, Backspace/Delete...)
 
-    private func installKeyMonitor() {
+    private func installMonitors() {
         guard keyMonitor == nil else { return }
 
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             self.handleKey(event)
         }
+
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
+            self.handleMouseDown(event)
+            return event
+        }
     }
 
-    private func removeKeyMonitor() {
+    private func removeMonitors() {
         if let keyMonitor {
             NSEvent.removeMonitor(keyMonitor)
         }
         keyMonitor = nil
+
+        if let mouseMonitor {
+            NSEvent.removeMonitor(mouseMonitor)
+        }
+        mouseMonitor = nil
+    }
+
+    private func handleMouseDown(_ event: NSEvent) {
+        guard !viewModel.selectedItems.isEmpty else { return }
+
+        // Nếu người dùng đang giữ ⌘ hoặc ⇧ thì không can thiệp (chọn thêm vùng)
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if flags.contains(.command) || flags.contains(.shift) {
+            return
+        }
+
+        guard let window = event.window, window === NSApp.keyWindow else { return }
+        guard let hitView = window.contentView?.hitTest(event.locationInWindow) else { return }
+
+        // Bỏ chọn khi click vào vùng trống của bảng (NSTableView rỗng bên dưới các row)
+        if let tableView = (hitView as? NSTableView) ?? (hitView.enclosingScrollView?.documentView as? NSTableView) {
+            let pointInTable = tableView.convert(event.locationInWindow, from: nil)
+            let row = tableView.row(at: pointInTable)
+            if row < 0 {
+                Task { @MainActor in
+                    self.viewModel.deselectAll()
+                }
+            }
+        }
     }
 
     private func handleKey(_ event: NSEvent) -> NSEvent? {
@@ -587,9 +733,24 @@ struct FileListView: View {
             viewModel.openFocusedItem()
             return nil
 
-        case 53: // Escape: thoát tìm kiếm
+        case 53: // Escape: thoát tìm kiếm hoặc bỏ chọn tất cả
             if viewModel.isSearchActive {
                 viewModel.leaveSearch()
+                return nil
+            }
+            if !viewModel.selectedItems.isEmpty {
+                viewModel.deselectAll()
+                return nil
+            }
+            return event
+
+        case 51, 117: // Backspace / Forward Delete: xoá vào thùng rác hoặc xoá ngay
+            guard !viewModel.selectedItems.isEmpty else { return event }
+            if flags.contains(.command) && flags.contains(.option) {
+                viewModel.requestDeleteImmediately()
+                return nil
+            } else if flags.contains(.command) || isPlain {
+                viewModel.trashSelectedItems()
                 return nil
             }
             return event
