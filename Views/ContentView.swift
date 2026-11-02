@@ -27,5 +27,13 @@ struct ContentView: View {
         .task {
             await updates.checkOnLaunch()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task {
+                if let last = updates.lastChecked, Date().timeIntervalSince(last) < 900 {
+                    return
+                }
+                await updates.checkForUpdates(userInitiated: false)
+            }
+        }
     }
 }

@@ -226,12 +226,67 @@ final class UpdateService: ObservableObject {
         request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
         request.setValue("Rooted/\(currentVersion)", forHTTPHeaderField: "User-Agent")
 
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+        if let (data, response) = try? await session.data(for: request),
+           let http = response as? HTTPURLResponse, http.statusCode == 200,
+           let release = try? JSONDecoder().decode(GitHubRelease.self, from: data) {
+            return release
+        }
+
+        // Fallback khi GitHub API bị chặn 403 Rate Limit hoặc không phản hồi:
+        return try await fetchLatestReleaseFromWeb()
+    }
+
+    private func fetchLatestReleaseFromWeb() async throws -> GitHubRelease {
+        final class RedirectDetector: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+            var redirectedLocation: URL?
+
+            func urlSession(
+                _ session: URLSession,
+                task: URLSessionTask,
+                willPerformHTTPRedirection response: HTTPURLResponse,
+                newRequest request: URLRequest,
+                completionHandler: @escaping (URLRequest?) -> Void
+            ) {
+                redirectedLocation = request.url
+                completionHandler(nil)
+            }
+        }
+
+        let detector = RedirectDetector()
+        let config = URLSessionConfiguration.ephemeral
+        let redirectSession = URLSession(configuration: config, delegate: detector, delegateQueue: nil)
+
+        let webURL = URL(string: "https://github.com/mquand/Rooted-Explorer-for-Mac/releases/latest")!
+        var request = URLRequest(url: webURL)
+        request.httpMethod = "HEAD"
+        request.setValue("Rooted/\(currentVersion)", forHTTPHeaderField: "User-Agent")
+
+        _ = try? await redirectSession.data(for: request)
+
+        guard let targetURL = detector.redirectedLocation,
+              targetURL.pathComponents.contains("tag") else {
             throw UpdateError.invalidResponse
         }
 
-        return try JSONDecoder().decode(GitHubRelease.self, from: data)
+        let tagName = targetURL.lastPathComponent
+        let downloadURL = URL(string: "https://github.com/mquand/Rooted-Explorer-for-Mac/releases/download/\(tagName)/Rooted-\(tagName).zip")!
+
+        let asset = GitHubRelease.Asset(
+            id: abs(tagName.hashValue),
+            name: "Rooted-\(tagName).zip",
+            browserDownloadURL: downloadURL,
+            size: 0
+        )
+
+        return GitHubRelease(
+            id: abs(tagName.hashValue),
+            tagName: tagName,
+            name: "Rooted \(tagName)",
+            body: "Phiên bản mới \(tagName) từ GitHub Releases.",
+            htmlURL: targetURL,
+            publishedAt: nil,
+            assets: [asset]
+        )
     }
 
     // MARK: - Installation
