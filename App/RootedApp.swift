@@ -95,6 +95,12 @@ struct AppCommands: Commands {
         }
 
         CommandGroup(after: .newItem) {
+            Button("New File") {
+                viewModel?.createNewFile()
+            }
+            .keyboardShortcut("t", modifiers: [.command, .shift])
+            .disabled(viewModel == nil)
+
             Button("New Folder") {
                 viewModel?.createNewFolder()
             }

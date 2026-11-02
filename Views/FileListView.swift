@@ -153,11 +153,7 @@ struct FileListView: View {
                     TerminalService.shared.openTerminal(at: viewModel.currentPath)
                 }
 
-                navButton("chart.bar.doc.horizontal", help: "Analyze Storage") {
-                    showAnalysis = true
-                }
-
-                navButton("arrow.clockwise", help: "Refresh") {
+                navButton("arrow.clockwise", help: "Refresh (F5 / ⌘R)") {
                     viewModel.refresh()
                 }
 
@@ -589,8 +585,18 @@ struct FileListView: View {
 
     @ViewBuilder
     private var backgroundMenu: some View {
+        Button("New File") {
+            if let newPath = viewModel.createNewFile(),
+               let file = viewModel.files.first(where: { $0.path == newPath }) {
+                beginRename(file)
+            }
+        }
+
         Button("New Folder") {
-            viewModel.createNewFolder()
+            if let newPath = viewModel.createNewFolder(),
+               let folder = viewModel.files.first(where: { $0.path == newPath }) {
+                beginRename(folder)
+            }
         }
 
         Button("Paste") {
@@ -761,6 +767,15 @@ struct FileListView: View {
         let isPlain = flags.isEmpty || flags == .shift
 
         switch event.keyCode {
+        case 120: // F2: Đổi tên (Rename theo kiểu Windows)
+            guard let file = viewModel.selectedFileItems.first else { return event }
+            beginRename(file)
+            return nil
+
+        case 96: // F5: Làm mới (Refresh theo kiểu Windows)
+            viewModel.refresh()
+            return nil
+
         case 49: // Space: Quick Look
             guard flags.isEmpty else { return event }
             QuickLookController.shared.toggle(urls: viewModel.previewURLs)
@@ -792,6 +807,18 @@ struct FileListView: View {
                 return nil
             }
             return event
+
+        case 123 where flags.contains(.option): // ⌥←: Back (Windows Alt+Left)
+            viewModel.goBack()
+            return nil
+
+        case 124 where flags.contains(.option): // ⌥→: Forward (Windows Alt+Right)
+            viewModel.goForward()
+            return nil
+
+        case 126 where flags.contains(.option): // ⌥↑: Up (Windows Alt+Up)
+            viewModel.navigateToParent()
+            return nil
 
         case 123, 124, 125, 126: // Phím mũi tên
             // Chỉ chặn khi không có modifier (⌘↑ = Go menu, Shift+ arrow = chọn

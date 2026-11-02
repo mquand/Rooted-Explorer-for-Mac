@@ -4,6 +4,7 @@ import AppKit
 struct SidebarView: View {
     @StateObject private var viewModel = SidebarViewModel()
     @ObservedObject var fileListViewModel: FileListViewModel
+    @EnvironmentObject private var settings: AppSettings
 
     @State private var favorites: [FavoriteLocation] = []
 
@@ -96,21 +97,23 @@ struct SidebarView: View {
                 }
             }
 
-            Section("Tags") {
-                ForEach(FinderTag.standard) { tag in
-                    HStack(spacing: 8) {
-                        Image(systemName: "circle.fill")
-                            .font(.system(size: 10))
-                            .foregroundColor(tag.color)
-                        Text(tag.name)
-                            .lineLimit(1)
-                        Spacer(minLength: 4)
+            if settings.showTagsInSidebar {
+                Section("Tags") {
+                    ForEach(FinderTag.standard) { tag in
+                        HStack(spacing: 8) {
+                            Image(systemName: "circle.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(tag.color)
+                            Text(tag.name)
+                                .lineLimit(1)
+                            Spacer(minLength: 4)
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            fileListViewModel.startTagSearch(tag)
+                        }
+                        .help("Search files with this tag")
                     }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        fileListViewModel.startTagSearch(tag)
-                    }
-                    .help("Search files with this tag")
                 }
             }
         }
@@ -118,6 +121,10 @@ struct SidebarView: View {
         .onAppear {
             loadFavorites()
             viewModel.refreshVolumes()
+            viewModel.revealPath(fileListViewModel.currentPath)
+        }
+        .onChange(of: fileListViewModel.currentPath) { newPath in
+            viewModel.revealPath(newPath)
         }
     }
 

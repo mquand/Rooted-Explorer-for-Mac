@@ -52,6 +52,10 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(automaticallyChecksForUpdates, forKey: Keys.autoUpdate) }
     }
 
+    @Published var showTagsInSidebar: Bool {
+        didSet { defaults.set(showTagsInSidebar, forKey: Keys.showTagsInSidebar) }
+    }
+
     private let defaults: UserDefaults
 
     private enum Keys {
@@ -60,6 +64,7 @@ final class AppSettings: ObservableObject {
         static let iconSize = "iconSize"
         static let singleClickOpen = "singleClickOpen"
         static let autoUpdate = "automaticallyChecksForUpdates"
+        static let showTagsInSidebar = "showTagsInSidebar"
         static let skippedVersion = "skippedUpdateVersion"
     }
 
@@ -71,6 +76,7 @@ final class AppSettings: ObservableObject {
         iconSize = storedIconSize > 0 ? storedIconSize : 96
         singleClickOpen = defaults.bool(forKey: Keys.singleClickOpen)
         automaticallyChecksForUpdates = defaults.object(forKey: Keys.autoUpdate) as? Bool ?? true
+        showTagsInSidebar = defaults.object(forKey: Keys.showTagsInSidebar) as? Bool ?? true
     }
 
     var skippedVersion: String? {

@@ -78,6 +78,20 @@ final class SidebarViewModel: ObservableObject {
         loadRootTree()
     }
 
+    /// Tự động mở rộng cây thư mục đến vị trí đang đứng (kiểu Windows Explorer Expand to current folder)
+    func revealPath(_ path: String) {
+        guard !path.isEmpty, path != "/" else { return }
+        let parts = path.split(separator: "/").map(String.init)
+        var current = ""
+        for part in parts {
+            current += "/" + part
+            if current == path { break }
+            if !expandedPaths.contains(current) {
+                toggleNode(at: current, expanded: true)
+            }
+        }
+    }
+
     func ejectVolume(at path: String) {
         let url = URL(fileURLWithPath: path)
         try? NSWorkspace.shared.unmountAndEjectDevice(at: url)

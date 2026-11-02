@@ -46,6 +46,8 @@ struct SettingsView: View {
 
             Toggle("Show hidden files", isOn: $settings.showHiddenFiles)
 
+            Toggle("Show Tags in sidebar", isOn: $settings.showTagsInSidebar)
+
             Toggle("Open folders with a single click", isOn: $settings.singleClickOpen)
 
             Text("Khi tắt, click để chọn và double-click để mở thư mục.")

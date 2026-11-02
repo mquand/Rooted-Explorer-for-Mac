@@ -584,25 +584,32 @@ class FileListViewModel: ObservableObject {
         loadFiles()
     }
 
-    func createNewFolder() {
+    @discardableResult
+    func createNewFolder(named baseName: String = "Untitled Folder") -> String? {
         let destination = URL(fileURLWithPath: currentPath, isDirectory: true)
-            .appendingPathComponent(uniqueName("Untitled Folder"), isDirectory: true)
+            .appendingPathComponent(uniqueName(baseName), isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: false)
             loadFiles()
+            selectOnly(destination.path)
+            return destination.path
         } catch {
             errorMessage = error.localizedDescription
+            return nil
         }
     }
 
-    func createNewFile() {
+    @discardableResult
+    func createNewFile(named baseName: String = "Untitled.txt") -> String? {
         let destination = URL(fileURLWithPath: currentPath, isDirectory: true)
-            .appendingPathComponent(uniqueName("Untitled.txt"))
+            .appendingPathComponent(uniqueName(baseName))
         guard FileManager.default.createFile(atPath: destination.path, contents: nil) else {
             errorMessage = "Không thể tạo file mới."
-            return
+            return nil
         }
         loadFiles()
+        selectOnly(destination.path)
+        return destination.path
     }
 
     @discardableResult
