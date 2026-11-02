@@ -22,14 +22,24 @@ struct SidebarView: View {
                 icon: "desktopcomputer"
             ),
             FavoriteLocation(
+                name: "Downloads",
+                path: (home as NSString).appendingPathComponent("Downloads"),
+                icon: "arrow.down.circle"
+            ),
+            FavoriteLocation(
                 name: "Documents",
                 path: (home as NSString).appendingPathComponent("Documents"),
                 icon: "doc"
             ),
             FavoriteLocation(
-                name: "Downloads",
-                path: (home as NSString).appendingPathComponent("Downloads"),
-                icon: "arrow.down.circle"
+                name: "Pictures",
+                path: (home as NSString).appendingPathComponent("Pictures"),
+                icon: "photo"
+            ),
+            FavoriteLocation(
+                name: "Music",
+                path: (home as NSString).appendingPathComponent("Music"),
+                icon: "music.note"
             ),
             FavoriteLocation(
                 name: "Applications",
@@ -41,6 +51,39 @@ struct SidebarView: View {
         favorites = candidates.filter {
             FileManager.default.fileExists(atPath: $0.path)
         }
+    }
+
+    private var displayVolumes: [(letter: String, volume: VolumeInfo)] {
+        // Lọc bỏ các volume tạm thời hoặc lặp của chính ứng dụng Rooted (.dmg đã mount)
+        let filtered = viewModel.volumes.filter { vol in
+            if vol.path != "/" && vol.name.lowercased().contains("rooted") {
+                return false
+            }
+            return true
+        }
+
+        var result: [(letter: String, volume: VolumeInfo)] = []
+        let letters = ["C", "D", "E", "F", "G", "H", "I"]
+        var letterIndex = 0
+
+        // Ổ C luôn là ổ hệ thống "/"
+        if let rootVol = filtered.first(where: { $0.path == "/" }) {
+            result.append((letter: "C", volume: rootVol))
+            letterIndex += 1
+        } else {
+            let dummy = VolumeInfo(name: "Macintosh HD", path: "/", totalSpace: 0, freeSpace: 0, usedSpace: 0, isMounted: true)
+            result.append((letter: "C", volume: dummy))
+            letterIndex += 1
+        }
+
+        // Các ổ đĩa khác: D:, E:, F:...
+        for vol in filtered where vol.path != "/" {
+            let letter = letterIndex < letters.count ? letters[letterIndex] : "\(letterIndex)"
+            result.append((letter: letter, volume: vol))
+            letterIndex += 1
+        }
+
+        return result
     }
 
     var body: some View {
@@ -86,75 +129,37 @@ struct SidebarView: View {
                 return true
             }
 
-            if !settings.recentFolders.isEmpty {
-                Section("Recent") {
-                    ForEach(settings.recentFolders, id: \.self) { path in
-                        let name = (path as NSString).lastPathComponent
-                        Button {
-                            fileListViewModel.navigateTo(path: path)
-                        } label: {
-                            Label(name, systemImage: "clock")
+            Section("This PC") {
+                ForEach(displayVolumes, id: \.volume.path) { item in
+                    Button {
+                        fileListViewModel.navigateTo(path: item.volume.path)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: item.letter == "C" ? "internaldrive.fill" : "externaldrive.fill")
+                                .foregroundColor(item.letter == "C" ? .accentColor : .secondary)
+
+                            Text(item.letter == "C" ? "Local Disk (C:)" : "\(item.volume.name) (\(item.letter):)")
                                 .lineLimit(1)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .listRowBackground(rowBackground(for: path))
-                        .contextMenu {
-                            Button("Clear Recent Folders") {
-                                settings.recentFolders.removeAll()
-                            }
-                        }
-                    }
-                }
-            }
 
-            if !viewModel.volumes.isEmpty {
-                Section("Locations") {
-                    ForEach(viewModel.volumes) { volume in
-                        Button {
-                            fileListViewModel.navigateTo(path: volume.path)
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: volume.path == "/" ? "internaldrive" : "externaldrive")
-                                    .foregroundColor(volume.path == "/" ? .primary : .secondary)
+                            Spacer(minLength: 4)
 
-                                Text(volume.name)
-                                    .lineLimit(1)
-
-                                Spacer(minLength: 4)
-
-                                if volume.path != "/" {
-                                    Button {
-                                        viewModel.ejectVolume(at: volume.path)
-                                    } label: {
-                                        Image(systemName: "eject")
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .help("Eject")
+                            if item.volume.path != "/" {
+                                Button {
+                                    viewModel.ejectVolume(at: item.volume.path)
+                                } label: {
+                                    Image(systemName: "eject")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
                                 }
+                                .buttonStyle(.plain)
+                                .help("Eject")
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
-                        .listRowBackground(rowBackground(for: volume.path))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                     }
-                }
-            }
-
-            if !viewModel.rootNodes.isEmpty {
-                Section("Root") {
-                    ForEach(viewModel.rootNodes) { node in
-                        DirectoryTreeRow(
-                            node: node,
-                            selectedPath: selectedPath,
-                            sidebarViewModel: viewModel,
-                            onSelect: { fileListViewModel.navigateTo(path: $0) }
-                        )
-                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(rowBackground(for: item.volume.path))
                 }
             }
 

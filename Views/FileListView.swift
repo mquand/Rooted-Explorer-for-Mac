@@ -494,6 +494,11 @@ struct FileListView: View {
         content()
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
+            .simultaneousGesture(
+                TapGesture(count: 2).onEnded {
+                    viewModel.openItem(file)
+                }
+            )
             .if(settings.singleClickOpen) { view in
                 view.onTapGesture { handleSingleClick(file) }
             }
@@ -812,12 +817,17 @@ struct FileListView: View {
 
         // 1. Double click vào hàng của bảng (NSTableView) để mở ngay lập tức
         if event.clickCount == 2 {
+            if let file = viewModel.selectedFileItems.first {
+                viewModel.openItem(file)
+                return
+            }
             if let hitView = window.contentView?.hitTest(event.locationInWindow) {
                 if let tableView = (hitView as? NSTableView) ?? (hitView.enclosingScrollView?.documentView as? NSTableView) {
                     let pointInTable = tableView.convert(event.locationInWindow, from: nil)
                     let row = tableView.row(at: pointInTable)
-                    if row >= 0 && row < viewModel.displayedFiles.count {
-                        let file = viewModel.displayedFiles[row]
+                    let validRow = row >= 0 ? row : tableView.selectedRow
+                    if validRow >= 0 && validRow < viewModel.displayedFiles.count {
+                        let file = viewModel.displayedFiles[validRow]
                         viewModel.openItem(file)
                         return
                     }
@@ -1132,6 +1142,11 @@ private struct FileIconCard: View {
             )
             .contentShape(Rectangle())
             .onTapGesture { onGridTap(file) }
+            .simultaneousGesture(
+                TapGesture(count: 2).onEnded {
+                    viewModel.openItem(file)
+                }
+            )
             .onDrag {
                 NSItemProvider(contentsOf: URL(fileURLWithPath: file.path)) ?? NSItemProvider()
             }
@@ -1205,6 +1220,11 @@ private struct FileGalleryThumbnail: View {
             )
             .contentShape(Rectangle())
             .onTapGesture { onGridTap(file) }
+            .simultaneousGesture(
+                TapGesture(count: 2).onEnded {
+                    viewModel.openItem(file)
+                }
+            )
             .onDrag {
                 NSItemProvider(contentsOf: URL(fileURLWithPath: file.path)) ?? NSItemProvider()
             }
@@ -1377,7 +1397,7 @@ private struct TableDoubleClickHandler: NSViewRepresentable {
         }
 
         @objc func onTableDoubleClick(_ sender: NSTableView) {
-            let row = sender.clickedRow
+            let row = sender.clickedRow >= 0 ? sender.clickedRow : sender.selectedRow
             if row >= 0 {
                 handler(row)
             }
