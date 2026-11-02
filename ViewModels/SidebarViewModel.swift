@@ -169,7 +169,7 @@ final class SidebarViewModel: ObservableObject {
 
     func ejectVolume(at path: String) {
         let url = URL(fileURLWithPath: path)
-        NSWorkspace.shared.unmountAndEjectDevice(at: url)
+        try? NSWorkspace.shared.unmountAndEjectDevice(at: url)
         Task {
             try? await Task.sleep(nanoseconds: 600_000_000)
             self.refreshVolumes()
