@@ -1,8 +1,8 @@
 import SwiftUI
 import AppKit
 
-/// Thanh đường dẫn dạng breadcrumb kiểu Windows Explorer: mỗi cấp là một nút
-/// bấm được, có nút sửa để gõ đường dẫn trực tiếp (hoặc phím ⇧⌘G).
+/// Thanh đường dẫn dạng breadcrumb kiểu Windows Explorer & VS Code: mỗi cấp là một nút
+/// bấm được, có mũi tên `>` mở danh sách thư mục con, có nút sửa để gõ đường dẫn trực tiếp (hoặc phím ⇧⌘G).
 struct PathBar: View {
     @ObservedObject var viewModel: FileListViewModel
 
@@ -99,15 +99,10 @@ struct PathBar: View {
     private var breadcrumbs: some View {
         HStack(spacing: 2) {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 2) {
+                HStack(spacing: 1) {
                     ForEach(Array(components.enumerated()), id: \.element.path) { index, component in
-                        if index > 0 {
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 9))
-                                .foregroundColor(.secondary)
-                        }
-
                         crumbButton(for: component, isCurrent: index == components.count - 1)
+                        chevronMenu(for: component)
                     }
                 }
             }
@@ -161,6 +156,66 @@ struct PathBar: View {
         }
         .buttonStyle(.borderless)
         .help(isCurrent ? "Click to edit path" : component.path)
+    }
+
+    private func chevronMenu(for component: Crumb) -> some View {
+        Menu {
+            let subdirs = Self.subdirectories(at: component.path)
+            if subdirs.isEmpty {
+                Text("Không có thư mục con")
+            } else {
+                ForEach(subdirs, id: \.path) { item in
+                    Button {
+                        viewModel.navigateTo(path: item.path)
+                    } label: {
+                        Label(item.name, systemImage: "folder")
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(.secondary)
+                .frame(width: 14, height: 20)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Thư mục con của \(component.name)")
+    }
+
+    // MARK: - Quét danh sách thư mục con
+
+    static func subdirectories(at path: String) -> [(name: String, path: String)] {
+        let url = URL(fileURLWithPath: path, isDirectory: true)
+        let keys: Set<URLResourceKey> = [.isDirectoryKey, .isPackageKey]
+        guard let contents = try? FileManager.default.contentsOfDirectory(
+            at: url,
+            includingPropertiesForKeys: Array(keys),
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            return []
+        }
+
+        var result: [(name: String, path: String)] = []
+        for item in contents {
+            guard let values = try? item.resourceValues(forKeys: keys),
+                  values.isDirectory == true,
+                  values.isPackage != true else {
+                continue
+            }
+            result.append((name: item.lastPathComponent, path: item.path))
+        }
+
+        let sorted = result.sorted {
+            $0.name.localizedStandardCompare($1.name) == .orderedAscending
+        }
+
+        if sorted.count > 60 {
+            return Array(sorted.prefix(60))
+        }
+        return sorted
     }
 
     // MARK: - Đường dẫn -> các cấp
