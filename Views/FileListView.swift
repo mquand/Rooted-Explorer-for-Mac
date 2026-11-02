@@ -179,6 +179,20 @@ struct FileListView: View {
             }
         }
         .padding(.bottom, 6)
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            handleTitleBarDoubleClick()
+        }
+    }
+
+    private func handleTitleBarDoubleClick() {
+        guard let window = NSApp.keyWindow else { return }
+        let action = UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick")
+        if action == "Minimize" {
+            window.performMiniaturize(nil)
+        } else {
+            window.zoom(nil)
+        }
     }
 
     private var searchField: some View {

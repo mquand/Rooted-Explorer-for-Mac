@@ -5,7 +5,6 @@ struct SidebarView: View {
     @StateObject private var viewModel = SidebarViewModel()
     @ObservedObject var fileListViewModel: FileListViewModel
 
-    /// Tính một lần khi sidebar mở — tránh kiểm tra fileExists mỗi lần render.
     @State private var favorites: [FavoriteLocation] = []
 
     private var selectedPath: String {
@@ -51,45 +50,36 @@ struct SidebarView: View {
                 }
             }
 
-            Section("Volumes") {
-                ForEach(viewModel.volumes) { volume in
-                    HStack {
-                        Image(systemName: "externaldrive.fill")
-                        Text(volume.name)
-                            .lineLimit(1)
-                        Spacer(minLength: 4)
-                        Text(volume.formattedFreeSpace)
-                            .foregroundColor(.secondary)
-                            .font(.caption)
+            if !viewModel.volumes.isEmpty {
+                Section("Locations") {
+                    ForEach(viewModel.volumes) { volume in
+                        HStack(spacing: 8) {
+                            Image(systemName: volume.path == "/" ? "internaldrive" : "externaldrive")
+                                .foregroundColor(volume.path == "/" ? .primary : .secondary)
 
-                        if volume.path != "/" {
-                            Button {
-                                viewModel.ejectVolume(at: volume.path)
-                            } label: {
-                                Image(systemName: "eject")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
+                            Text(volume.name)
+                                .lineLimit(1)
+
+                            Spacer(minLength: 4)
+
+                            if volume.path != "/" {
+                                Button {
+                                    viewModel.ejectVolume(at: volume.path)
+                                } label: {
+                                    Image(systemName: "eject")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Eject")
                             }
-                            .buttonStyle(.plain)
-                            .help("Eject volume")
                         }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            fileListViewModel.navigateTo(path: volume.path)
+                        }
+                        .listRowBackground(rowBackground(for: volume.path))
                     }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        fileListViewModel.navigateTo(path: volume.path)
-                    }
-                    .listRowBackground(rowBackground(for: volume.path))
-                }
-            }
-
-            Section("Folders") {
-                ForEach(viewModel.rootNodes) { node in
-                    DirectoryTreeRow(
-                        node: node,
-                        selectedPath: selectedPath,
-                        sidebarViewModel: viewModel,
-                        onSelect: { fileListViewModel.navigateTo(path: $0) }
-                    )
                 }
             }
 
@@ -107,7 +97,7 @@ struct SidebarView: View {
                     .onTapGesture {
                         fileListViewModel.startTagSearch(tag)
                     }
-                    .help("Tìm tất cả file gắn tag này")
+                    .help("Search files with this tag")
                 }
             }
         }
@@ -139,80 +129,4 @@ private struct FavoriteLocation: Identifiable {
     let name: String
     let path: String
     let icon: String
-}
-
-private struct DirectoryTreeRow: View {
-    let node: DirectoryNode
-    let selectedPath: String
-    @ObservedObject var sidebarViewModel: SidebarViewModel
-    let onSelect: (String) -> Void
-
-    private var isExpanded: Binding<Bool> {
-        Binding(
-            get: { node.isExpanded },
-            set: { sidebarViewModel.toggleNode(at: node.path, expanded: $0) }
-        )
-    }
-
-    var body: some View {
-        if node.hasChildren || !node.isLoaded {
-            DisclosureGroup(isExpanded: isExpanded) {
-                ForEach(node.children) { child in
-                    DirectoryTreeRow(
-                        node: child,
-                        selectedPath: selectedPath,
-                        sidebarViewModel: sidebarViewModel,
-                        onSelect: onSelect
-                    )
-                }
-
-                if sidebarViewModel.loadingPaths.contains(node.path) {
-                    HStack {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("Loading…")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.leading, 16)
-                }
-            } label: {
-                label
-            }
-            .listRowBackground(rowBackground)
-        } else {
-            label
-                .listRowBackground(rowBackground)
-        }
-    }
-
-    private var label: some View {
-        Label(node.name, systemImage: node.isExpanded ? "folder.fill" : "folder")
-            .foregroundColor(selectedPath == node.path ? .accentColor : .primary)
-            .lineLimit(1)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                onSelect(node.path)
-            }
-            .contextMenu {
-                Button("Open") {
-                    onSelect(node.path)
-                }
-                Button("Open in Terminal") {
-                    TerminalService.shared.openTerminal(at: node.path)
-                }
-                Button("Reveal in Finder") {
-                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: node.path)])
-                }
-                Divider()
-                Button("Copy Path") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(node.path, forType: .string)
-                }
-            }
-    }
-
-    private var rowBackground: Color {
-        selectedPath == node.path ? Color.accentColor.opacity(0.15) : Color.clear
-    }
 }
