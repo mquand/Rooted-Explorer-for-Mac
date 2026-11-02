@@ -92,7 +92,7 @@ final class AppSettings: ObservableObject {
         singleClickOpen = defaults.bool(forKey: Keys.singleClickOpen)
         automaticallyChecksForUpdates = defaults.object(forKey: Keys.autoUpdate) as? Bool ?? true
         showTagsInSidebar = defaults.object(forKey: Keys.showTagsInSidebar) as? Bool ?? true
-        showItemCheckBoxes = defaults.object(forKey: Keys.showItemCheckBoxes) as? Bool ?? true
+        showItemCheckBoxes = defaults.object(forKey: Keys.showItemCheckBoxes) as? Bool ?? false
         customFavorites = defaults.stringArray(forKey: Keys.customFavorites) ?? []
         recentFolders = defaults.stringArray(forKey: Keys.recentFolders) ?? []
     }

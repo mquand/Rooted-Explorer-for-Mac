@@ -469,7 +469,17 @@ class FileListViewModel: ObservableObject {
 
     // MARK: - Opening
 
+    private var lastOpenTime: TimeInterval = 0
+    private var lastOpenPath: String?
+
     func openItem(_ item: FileItem) {
+        let now = Date().timeIntervalSinceReferenceDate
+        if lastOpenPath == item.path && (now - lastOpenTime) < 0.35 {
+            return
+        }
+        lastOpenTime = now
+        lastOpenPath = item.path
+
         if item.isDirectory {
             navigateTo(path: item.path)
         } else {

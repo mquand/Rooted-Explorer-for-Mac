@@ -7,7 +7,7 @@ struct SidebarView: View {
     @EnvironmentObject private var settings: AppSettings
 
     @State private var favorites: [FavoriteLocation] = []
-    @State private var isCDriveExpanded: Bool = true
+    @State private var isHDExpanded: Bool = true
 
     private var selectedPath: String {
         fileListViewModel.currentPath
@@ -54,37 +54,32 @@ struct SidebarView: View {
         }
     }
 
-    private var displayVolumes: [(letter: String, volume: VolumeInfo)] {
-        // Lọc bỏ các volume tạm thời hoặc lặp của chính ứng dụng Rooted (.dmg đã mount)
-        let filtered = viewModel.volumes.filter { vol in
-            if vol.path != "/" && vol.name.lowercased().contains("rooted") {
+    private var rootVolumeName: String {
+        if let root = viewModel.volumes.first(where: { $0.path == "/" }), !root.name.isEmpty {
+            return root.name
+        }
+        return "Macintosh HD"
+    }
+
+    private var externalVolumes: [VolumeInfo] {
+        var seen = Set<String>()
+        return viewModel.volumes.filter { vol in
+            guard vol.path != "/" else { return false }
+            let name = vol.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { return false }
+            let lower = name.lowercased()
+
+            // Lọc bỏ DMG installer của Rooted hoặc các file cài đặt tạm thời
+            if lower.contains("rooted") || lower.hasPrefix("install ") {
                 return false
             }
+
+            if seen.contains(lower) {
+                return false
+            }
+            seen.insert(lower)
             return true
         }
-
-        var result: [(letter: String, volume: VolumeInfo)] = []
-        let letters = ["C", "D", "E", "F", "G", "H", "I"]
-        var letterIndex = 0
-
-        // Ổ C luôn là ổ hệ thống "/"
-        if let rootVol = filtered.first(where: { $0.path == "/" }) {
-            result.append((letter: "C", volume: rootVol))
-            letterIndex += 1
-        } else {
-            let dummy = VolumeInfo(name: "Macintosh HD", path: "/", totalSpace: 0, freeSpace: 0, usedSpace: 0, isMounted: true)
-            result.append((letter: "C", volume: dummy))
-            letterIndex += 1
-        }
-
-        // Các ổ đĩa khác: D:, E:, F:...
-        for vol in filtered where vol.path != "/" {
-            let letter = letterIndex < letters.count ? letters[letterIndex] : "\(letterIndex)"
-            result.append((letter: letter, volume: vol))
-            letterIndex += 1
-        }
-
-        return result
     }
 
     var body: some View {
@@ -131,9 +126,9 @@ struct SidebarView: View {
             }
 
             Section("This PC") {
-                // Ổ đĩa C: (Local Disk) kèm cây thư mục có thể mở rộng
+                // Ổ đĩa hệ thống chính (Macintosh HD) kèm cây thư mục có thể mở rộng
                 DisclosureGroup(
-                    isExpanded: $isCDriveExpanded
+                    isExpanded: $isHDExpanded
                 ) {
                     ForEach(viewModel.rootNodes) { node in
                         DirectoryTreeRow(
@@ -150,7 +145,8 @@ struct SidebarView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "internaldrive.fill")
                                 .foregroundColor(selectedPath == "/" ? .accentColor : .primary)
-                            Text("Local Disk (C:)")
+                            Text(rootVolumeName)
+                                .fontWeight(.medium)
                                 .lineLimit(1)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -160,22 +156,22 @@ struct SidebarView: View {
                 }
                 .listRowBackground(rowBackground(for: "/"))
 
-                // Các ổ đĩa khác (D:, E:...)
-                ForEach(displayVolumes.filter { $0.letter != "C" }, id: \.volume.path) { item in
+                // Các ổ đĩa ngoài thực tế (USB, External SSD...)
+                ForEach(externalVolumes, id: \.path) { vol in
                     Button {
-                        fileListViewModel.navigateTo(path: item.volume.path)
+                        fileListViewModel.navigateTo(path: vol.path)
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "externaldrive.fill")
                                 .foregroundColor(.secondary)
 
-                            Text("\(item.volume.name) (\(item.letter):)")
+                            Text(vol.name)
                                 .lineLimit(1)
 
                             Spacer(minLength: 4)
 
                             Button {
-                                viewModel.ejectVolume(at: item.volume.path)
+                                viewModel.ejectVolume(at: vol.path)
                             } label: {
                                 Image(systemName: "eject")
                                     .font(.caption2)
@@ -188,7 +184,7 @@ struct SidebarView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .listRowBackground(rowBackground(for: item.volume.path))
+                    .listRowBackground(rowBackground(for: vol.path))
                 }
             }
 

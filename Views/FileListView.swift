@@ -720,12 +720,6 @@ struct FileListView: View {
 
         Divider()
 
-        Toggle(isOn: $settings.showItemCheckBoxes) {
-            Text("Show Item Checkboxes")
-        }
-
-        Divider()
-
         Menu("Selection") {
             Button("Select All (⌘A)") {
                 viewModel.selectAll()
@@ -817,10 +811,6 @@ struct FileListView: View {
 
         // 1. Double click vào hàng của bảng (NSTableView) để mở ngay lập tức
         if event.clickCount == 2 {
-            if let file = viewModel.selectedFileItems.first {
-                viewModel.openItem(file)
-                return
-            }
             if let hitView = window.contentView?.hitTest(event.locationInWindow) {
                 if let tableView = (hitView as? NSTableView) ?? (hitView.enclosingScrollView?.documentView as? NSTableView) {
                     let pointInTable = tableView.convert(event.locationInWindow, from: nil)
@@ -1038,35 +1028,8 @@ private struct FileNameCell: View {
     @ObservedObject var viewModel: FileListViewModel
     @ObservedObject var settings: AppSettings
 
-    @State private var isHovered = false
-
-    private var isSelected: Bool {
-        viewModel.selectedItems.contains(file.path)
-    }
-
-    private var isMultiSelecting: Bool {
-        viewModel.isMultiSelectMode || viewModel.selectedItems.count > 1
-    }
-
-    private var showCheckbox: Bool {
-        guard settings.showItemCheckBoxes else { return false }
-        return isMultiSelecting
-    }
-
     var body: some View {
         HStack(spacing: 6) {
-            if showCheckbox {
-                Button {
-                    viewModel.toggleSelection(file.path)
-                } label: {
-                    Image(systemName: isSelected ? "checkmark.square.fill" : "square")
-                        .font(.system(size: 13))
-                        .foregroundColor(isSelected ? .accentColor : .secondary)
-                }
-                .buttonStyle(.plain)
-                .help(isSelected ? "Bỏ chọn" : "Chọn")
-            }
-
             Image(systemName: file.icon)
                 .foregroundColor(file.iconColor)
                 .frame(width: 16)
@@ -1086,9 +1049,6 @@ private struct FileNameCell: View {
 
             TagDots(tags: file.tags)
         }
-        .onHover { hovering in
-            isHovered = hovering
-        }
     }
 }
 
@@ -1101,79 +1061,45 @@ private struct FileIconCard: View {
     let onGridTap: (FileItem) -> Void
     let onRename: (FileItem) -> Void
 
-    @State private var isHovered = false
-
     private var isSelected: Bool {
         viewModel.selectedItems.contains(file.path)
     }
 
-    private var isMultiSelecting: Bool {
-        viewModel.isMultiSelectMode || viewModel.selectedItems.count > 1
-    }
-
-    private var showCheckbox: Bool {
-        guard settings.showItemCheckBoxes else { return false }
-        return isMultiSelecting
-    }
-
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            VStack(spacing: 6) {
-                FileThumbnail(file: file, size: settings.iconSize)
-                    .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+        VStack(spacing: 6) {
+            FileThumbnail(file: file, size: settings.iconSize)
+                .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
 
-                Text(file.name)
-                    .font(.caption)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .foregroundColor(file.isHidden ? .secondary : .primary)
+            Text(file.name)
+                .font(.caption)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .foregroundColor(file.isHidden ? .secondary : .primary)
 
-                TagDots(tags: file.tags)
-            }
-            .padding(8)
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 9)
-                    .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 9)
-                    .stroke(isSelected ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1)
-            )
-            .contentShape(Rectangle())
-            .onTapGesture { onGridTap(file) }
-            .simultaneousGesture(
-                TapGesture(count: 2).onEnded {
-                    viewModel.openItem(file)
-                }
-            )
-            .onDrag {
-                NSItemProvider(contentsOf: URL(fileURLWithPath: file.path)) ?? NSItemProvider()
-            }
-            .contextMenu {
-                FileItemActions(viewModel: viewModel, file: file, onRename: onRename)
-            }
-
-            if showCheckbox {
-                Button {
-                    viewModel.toggleSelection(file.path)
-                } label: {
-                    Image(systemName: isSelected ? "checkmark.square.fill" : "square")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(isSelected ? .accentColor : .secondary)
-                        .padding(3)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.85))
-                        )
-                }
-                .buttonStyle(.plain)
-                .padding(4)
-                .help(isSelected ? "Bỏ chọn" : "Chọn")
-            }
+            TagDots(tags: file.tags)
         }
-        .onHover { hovering in
-            isHovered = hovering
+        .padding(8)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 9)
+                .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 9)
+                .stroke(isSelected ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { onGridTap(file) }
+        .simultaneousGesture(
+            TapGesture(count: 2).onEnded {
+                viewModel.openItem(file)
+            }
+        )
+        .onDrag {
+            NSItemProvider(contentsOf: URL(fileURLWithPath: file.path)) ?? NSItemProvider()
+        }
+        .contextMenu {
+            FileItemActions(viewModel: viewModel, file: file, onRename: onRename)
         }
     }
 }
@@ -1187,71 +1113,37 @@ private struct FileGalleryThumbnail: View {
     let onGridTap: (FileItem) -> Void
     let onRename: (FileItem) -> Void
 
-    @State private var isHovered = false
-
     private var isSelected: Bool {
         viewModel.selectedItems.contains(file.path)
     }
 
-    private var isMultiSelecting: Bool {
-        viewModel.isMultiSelectMode || viewModel.selectedItems.count > 1
-    }
-
-    private var showCheckbox: Bool {
-        guard settings.showItemCheckBoxes else { return false }
-        return isMultiSelecting
-    }
-
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            VStack(spacing: 4) {
-                FileThumbnail(file: file, size: 54)
-                Text(file.name)
-                    .font(.caption2)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(width: 78)
-                TagDots(tags: file.tags)
-            }
-            .padding(6)
-            .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
-            )
-            .contentShape(Rectangle())
-            .onTapGesture { onGridTap(file) }
-            .simultaneousGesture(
-                TapGesture(count: 2).onEnded {
-                    viewModel.openItem(file)
-                }
-            )
-            .onDrag {
-                NSItemProvider(contentsOf: URL(fileURLWithPath: file.path)) ?? NSItemProvider()
-            }
-            .contextMenu {
-                FileItemActions(viewModel: viewModel, file: file, onRename: onRename)
-            }
-
-            if showCheckbox {
-                Button {
-                    viewModel.toggleSelection(file.path)
-                } label: {
-                    Image(systemName: isSelected ? "checkmark.square.fill" : "square")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(isSelected ? .accentColor : .secondary)
-                        .padding(2)
-                        .background(
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.85))
-                        )
-                }
-                .buttonStyle(.plain)
-                .padding(2)
-                .help(isSelected ? "Bỏ chọn" : "Chọn")
-            }
+        VStack(spacing: 4) {
+            FileThumbnail(file: file, size: 54)
+            Text(file.name)
+                .font(.caption2)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(width: 78)
+            TagDots(tags: file.tags)
         }
-        .onHover { hovering in
-            isHovered = hovering
+        .padding(6)
+        .background(
+            RoundedRectangle(cornerRadius: 7)
+                .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { onGridTap(file) }
+        .simultaneousGesture(
+            TapGesture(count: 2).onEnded {
+                viewModel.openItem(file)
+            }
+        )
+        .onDrag {
+            NSItemProvider(contentsOf: URL(fileURLWithPath: file.path)) ?? NSItemProvider()
+        }
+        .contextMenu {
+            FileItemActions(viewModel: viewModel, file: file, onRename: onRename)
         }
     }
 }

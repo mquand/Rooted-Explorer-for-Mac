@@ -222,8 +222,6 @@ final class SidebarViewModel: ObservableObject {
         "/Volumes",
         "/dev",
         "/cores",
-        "/System",
-        "/Library",
         "/private",
         "/bin",
         "/sbin",
