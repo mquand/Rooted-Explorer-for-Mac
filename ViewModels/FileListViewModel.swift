@@ -42,6 +42,7 @@ class FileListViewModel: ObservableObject {
     @Published var folderSizes: [String: UInt64] = [:]
     @Published var showDeleteImmediatelyConfirm: Bool = false
     @Published var isEditingPath: Bool = false
+    @Published var isMultiSelectMode: Bool = false
 
     var displayedFiles: [FileItem] {
         switch filterMode {

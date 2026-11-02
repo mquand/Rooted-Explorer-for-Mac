@@ -117,8 +117,12 @@ struct FileListView: View {
 
                     Divider()
 
+                    Toggle(isOn: $viewModel.isMultiSelectMode) {
+                        Label("Chế độ chọn nhiều file", systemImage: "checkmark.square")
+                    }
+
                     Toggle(isOn: $settings.showItemCheckBoxes) {
-                        Label("Hộp kiểm chọn file (Checkboxes)", systemImage: "checkmark.square")
+                        Label("Hỗ trợ hộp kiểm (Checkboxes)", systemImage: "checklist")
                     }
 
                     Divider()
@@ -149,6 +153,14 @@ struct FileListView: View {
                 }
                 .menuStyle(.borderlessButton)
                 .help("Lọc & Chọn: \(viewModel.filterMode.title)")
+
+                navButton(
+                    viewModel.isMultiSelectMode ? "checkmark.square.fill" : "checkmark.square",
+                    help: "Chế độ chọn nhiều file"
+                ) {
+                    viewModel.isMultiSelectMode.toggle()
+                }
+                .foregroundColor(viewModel.isMultiSelectMode ? .accentColor : .primary)
 
                 navButton(settings.showHiddenFiles ? "eye" : "eye.slash", help: "Show Hidden Files") {
                     settings.showHiddenFiles.toggle()
@@ -313,37 +325,7 @@ struct FileListView: View {
         Table(viewModel.displayedFiles, selection: $viewModel.selectedItems, sortOrder: $viewModel.sortOrder) {
             TableColumn("Name", value: \.name) { file in
                 tableCell(for: file) {
-                    HStack(spacing: 6) {
-                        if settings.showItemCheckBoxes {
-                            Button {
-                                viewModel.toggleSelection(file.path)
-                            } label: {
-                                Image(systemName: isSelected(file) ? "checkmark.square.fill" : "square")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(isSelected(file) ? .accentColor : .secondary)
-                            }
-                            .buttonStyle(.plain)
-                            .help(isSelected(file) ? "Bỏ chọn" : "Chọn")
-                        }
-
-                        Image(systemName: file.icon)
-                            .foregroundColor(file.iconColor)
-                            .frame(width: 16)
-                        Text(file.name)
-                            .foregroundColor(file.isHidden ? .secondary : .primary)
-                            .lineLimit(1)
-
-                        if file.gitStatus != .none {
-                            Text(file.gitStatus.rawValue)
-                                .font(.caption2)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(gitStatusColor(file.gitStatus))
-                                .cornerRadius(4)
-                        }
-
-                        TagDots(tags: file.tags)
-                    }
+                    FileNameCell(file: file, viewModel: viewModel, settings: settings)
                 }
             }
             .width(min: 220, max: 500)
@@ -412,53 +394,13 @@ struct FileListView: View {
                     spacing: 18
                 ) {
                     ForEach(viewModel.displayedFiles) { file in
-                        ZStack(alignment: .topLeading) {
-                            VStack(spacing: 6) {
-                                FileThumbnail(file: file, size: settings.iconSize)
-                                    .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
-
-                                Text(file.name)
-                                    .font(.caption)
-                                    .multilineTextAlignment(.center)
-                                    .lineLimit(2)
-                                    .foregroundColor(file.isHidden ? .secondary : .primary)
-
-                                TagDots(tags: file.tags)
-                            }
-                            .padding(8)
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                RoundedRectangle(cornerRadius: 9)
-                                    .fill(isSelected(file) ? Color.accentColor.opacity(0.18) : Color.clear)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 9)
-                                    .stroke(isSelected(file) ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1)
-                            )
-                            .contentShape(Rectangle())
-                            .onTapGesture { handleGridTap(file) }
-                            .contextMenu {
-                                FileItemActions(viewModel: viewModel, file: file, onRename: beginRename)
-                            }
-
-                            if settings.showItemCheckBoxes {
-                                Button {
-                                    viewModel.toggleSelection(file.path)
-                                } label: {
-                                    Image(systemName: isSelected(file) ? "checkmark.square.fill" : "square")
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(isSelected(file) ? .accentColor : .secondary)
-                                        .padding(3)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 4)
-                                                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.85))
-                                        )
-                                }
-                                .buttonStyle(.plain)
-                                .padding(4)
-                                .help(isSelected(file) ? "Bỏ chọn" : "Chọn")
-                            }
-                        }
+                        FileIconCard(
+                            file: file,
+                            viewModel: viewModel,
+                            settings: settings,
+                            onGridTap: handleGridTap,
+                            onRename: beginRename
+                        )
                     }
                 }
                 .padding(16)
@@ -510,45 +452,13 @@ struct FileListView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 8) {
                     ForEach(viewModel.displayedFiles) { file in
-                        ZStack(alignment: .topLeading) {
-                            VStack(spacing: 4) {
-                                FileThumbnail(file: file, size: 54)
-                                Text(file.name)
-                                    .font(.caption2)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                                    .frame(width: 78)
-                                TagDots(tags: file.tags)
-                            }
-                            .padding(6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 7)
-                                    .fill(isSelected(file) ? Color.accentColor.opacity(0.18) : Color.clear)
-                            )
-                            .contentShape(Rectangle())
-                            .onTapGesture { handleGridTap(file) }
-                            .contextMenu {
-                                FileItemActions(viewModel: viewModel, file: file, onRename: beginRename)
-                            }
-
-                            if settings.showItemCheckBoxes {
-                                Button {
-                                    viewModel.toggleSelection(file.path)
-                                } label: {
-                                    Image(systemName: isSelected(file) ? "checkmark.square.fill" : "square")
-                                        .font(.system(size: 11, weight: .medium))
-                                        .foregroundColor(isSelected(file) ? .accentColor : .secondary)
-                                        .padding(2)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 3)
-                                                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.85))
-                                        )
-                                }
-                                .buttonStyle(.plain)
-                                .padding(2)
-                                .help(isSelected(file) ? "Bỏ chọn" : "Chọn")
-                            }
-                        }
+                        FileGalleryThumbnail(
+                            file: file,
+                            viewModel: viewModel,
+                            settings: settings,
+                            onGridTap: handleGridTap,
+                            onRename: beginRename
+                        )
                     }
                 }
                 .padding(10)
@@ -739,7 +649,7 @@ struct FileListView: View {
         }
     }
 
-    private func gitStatusColor(_ status: GitStatus) -> Color {
+    static func gitStatusColor(_ status: GitStatus) -> Color {
         switch status {
         case .modified: return .orange
         case .untracked: return .green
@@ -956,6 +866,221 @@ struct TagDots: View {
                         .frame(width: 8, height: 8)
                 }
             }
+        }
+    }
+}
+
+// MARK: - File Name Cell (List View)
+
+private struct FileNameCell: View {
+    let file: FileItem
+    @ObservedObject var viewModel: FileListViewModel
+    @ObservedObject var settings: AppSettings
+
+    @State private var isHovered = false
+
+    private var isSelected: Bool {
+        viewModel.selectedItems.contains(file.path)
+    }
+
+    private var isMultiSelecting: Bool {
+        viewModel.isMultiSelectMode || viewModel.selectedItems.count > 1
+    }
+
+    private var showCheckbox: Bool {
+        guard settings.showItemCheckBoxes else { return false }
+        if isMultiSelecting { return true }
+        if isHovered { return true }
+        return false
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if showCheckbox {
+                Button {
+                    viewModel.toggleSelection(file.path)
+                } label: {
+                    Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                        .font(.system(size: 13))
+                        .foregroundColor(isSelected ? .accentColor : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help(isSelected ? "Bỏ chọn" : "Chọn")
+            }
+
+            Image(systemName: file.icon)
+                .foregroundColor(file.iconColor)
+                .frame(width: 16)
+
+            Text(file.name)
+                .foregroundColor(file.isHidden ? .secondary : .primary)
+                .lineLimit(1)
+
+            if file.gitStatus != .none {
+                Text(file.gitStatus.rawValue)
+                    .font(.caption2)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(FileListView.gitStatusColor(file.gitStatus))
+                    .cornerRadius(4)
+            }
+
+            TagDots(tags: file.tags)
+        }
+        .onHover { hovering in
+            isHovered = hovering
+        }
+    }
+}
+
+// MARK: - File Icon Card (Icons View)
+
+private struct FileIconCard: View {
+    let file: FileItem
+    @ObservedObject var viewModel: FileListViewModel
+    @ObservedObject var settings: AppSettings
+    let onGridTap: (FileItem) -> Void
+    let onRename: (FileItem) -> Void
+
+    @State private var isHovered = false
+
+    private var isSelected: Bool {
+        viewModel.selectedItems.contains(file.path)
+    }
+
+    private var isMultiSelecting: Bool {
+        viewModel.isMultiSelectMode || viewModel.selectedItems.count > 1
+    }
+
+    private var showCheckbox: Bool {
+        guard settings.showItemCheckBoxes else { return false }
+        if isMultiSelecting { return true }
+        if isHovered { return true }
+        return false
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            VStack(spacing: 6) {
+                FileThumbnail(file: file, size: settings.iconSize)
+                    .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+
+                Text(file.name)
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .foregroundColor(file.isHidden ? .secondary : .primary)
+
+                TagDots(tags: file.tags)
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 9)
+                    .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 9)
+                    .stroke(isSelected ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+            .onTapGesture { onGridTap(file) }
+            .contextMenu {
+                FileItemActions(viewModel: viewModel, file: file, onRename: onRename)
+            }
+
+            if showCheckbox {
+                Button {
+                    viewModel.toggleSelection(file.path)
+                } label: {
+                    Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(isSelected ? .accentColor : .secondary)
+                        .padding(3)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.85))
+                        )
+                }
+                .buttonStyle(.plain)
+                .padding(4)
+                .help(isSelected ? "Bỏ chọn" : "Chọn")
+            }
+        }
+        .onHover { hovering in
+            isHovered = hovering
+        }
+    }
+}
+
+// MARK: - File Gallery Thumbnail (Gallery View)
+
+private struct FileGalleryThumbnail: View {
+    let file: FileItem
+    @ObservedObject var viewModel: FileListViewModel
+    @ObservedObject var settings: AppSettings
+    let onGridTap: (FileItem) -> Void
+    let onRename: (FileItem) -> Void
+
+    @State private var isHovered = false
+
+    private var isSelected: Bool {
+        viewModel.selectedItems.contains(file.path)
+    }
+
+    private var isMultiSelecting: Bool {
+        viewModel.isMultiSelectMode || viewModel.selectedItems.count > 1
+    }
+
+    private var showCheckbox: Bool {
+        guard settings.showItemCheckBoxes else { return false }
+        if isMultiSelecting { return true }
+        if isHovered { return true }
+        return false
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            VStack(spacing: 4) {
+                FileThumbnail(file: file, size: 54)
+                Text(file.name)
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(width: 78)
+                TagDots(tags: file.tags)
+            }
+            .padding(6)
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+            )
+            .contentShape(Rectangle())
+            .onTapGesture { onGridTap(file) }
+            .contextMenu {
+                FileItemActions(viewModel: viewModel, file: file, onRename: onRename)
+            }
+
+            if showCheckbox {
+                Button {
+                    viewModel.toggleSelection(file.path)
+                } label: {
+                    Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(isSelected ? .accentColor : .secondary)
+                        .padding(2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.85))
+                        )
+                }
+                .buttonStyle(.plain)
+                .padding(2)
+                .help(isSelected ? "Bỏ chọn" : "Chọn")
+            }
+        }
+        .onHover { hovering in
+            isHovered = hovering
         }
     }
 }
