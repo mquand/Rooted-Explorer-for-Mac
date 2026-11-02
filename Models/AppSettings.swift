@@ -56,6 +56,10 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(showTagsInSidebar, forKey: Keys.showTagsInSidebar) }
     }
 
+    @Published var showItemCheckBoxes: Bool {
+        didSet { defaults.set(showItemCheckBoxes, forKey: Keys.showItemCheckBoxes) }
+    }
+
     private let defaults: UserDefaults
 
     private enum Keys {
@@ -65,6 +69,7 @@ final class AppSettings: ObservableObject {
         static let singleClickOpen = "singleClickOpen"
         static let autoUpdate = "automaticallyChecksForUpdates"
         static let showTagsInSidebar = "showTagsInSidebar"
+        static let showItemCheckBoxes = "showItemCheckBoxes"
         static let skippedVersion = "skippedUpdateVersion"
     }
 
@@ -77,6 +82,7 @@ final class AppSettings: ObservableObject {
         singleClickOpen = defaults.bool(forKey: Keys.singleClickOpen)
         automaticallyChecksForUpdates = defaults.object(forKey: Keys.autoUpdate) as? Bool ?? true
         showTagsInSidebar = defaults.object(forKey: Keys.showTagsInSidebar) as? Bool ?? true
+        showItemCheckBoxes = defaults.object(forKey: Keys.showItemCheckBoxes) as? Bool ?? true
     }
 
     var skippedVersion: String? {

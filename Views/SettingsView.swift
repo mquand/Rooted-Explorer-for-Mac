@@ -48,6 +48,8 @@ struct SettingsView: View {
 
             Toggle("Show Tags in sidebar", isOn: $settings.showTagsInSidebar)
 
+            Toggle("Show item check boxes (Tích chọn file kiểu Windows)", isOn: $settings.showItemCheckBoxes)
+
             Toggle("Open folders with a single click", isOn: $settings.singleClickOpen)
 
             Text("Khi tắt, click để chọn và double-click để mở thư mục.")

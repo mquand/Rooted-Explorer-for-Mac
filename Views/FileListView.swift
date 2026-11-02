@@ -117,6 +117,16 @@ struct FileListView: View {
 
                     Divider()
 
+                    Toggle(isOn: $settings.showItemCheckBoxes) {
+                        Label("Hộp kiểm chọn file (Checkboxes)", systemImage: "checkmark.square")
+                    }
+
+                    Divider()
+
+                    Button("Chọn tất cả (⌘A)") {
+                        viewModel.selectAll()
+                    }
+
                     Button("Chọn tất cả thư mục") {
                         viewModel.selectAllFolders()
                     }
@@ -304,6 +314,18 @@ struct FileListView: View {
             TableColumn("Name", value: \.name) { file in
                 tableCell(for: file) {
                     HStack(spacing: 6) {
+                        if settings.showItemCheckBoxes {
+                            Button {
+                                viewModel.toggleSelection(file.path)
+                            } label: {
+                                Image(systemName: isSelected(file) ? "checkmark.square.fill" : "square")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(isSelected(file) ? .accentColor : .secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .help(isSelected(file) ? "Bỏ chọn" : "Chọn")
+                        }
+
                         Image(systemName: file.icon)
                             .foregroundColor(file.iconColor)
                             .frame(width: 16)
@@ -383,33 +405,53 @@ struct FileListView: View {
                     spacing: 18
                 ) {
                     ForEach(viewModel.displayedFiles) { file in
-                        VStack(spacing: 6) {
-                            FileThumbnail(file: file, size: settings.iconSize)
-                                .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+                        ZStack(alignment: .topLeading) {
+                            VStack(spacing: 6) {
+                                FileThumbnail(file: file, size: settings.iconSize)
+                                    .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
 
-                            Text(file.name)
-                                .font(.caption)
-                                .multilineTextAlignment(.center)
-                                .lineLimit(2)
-                                .foregroundColor(file.isHidden ? .secondary : .primary)
+                                Text(file.name)
+                                    .font(.caption)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                                    .foregroundColor(file.isHidden ? .secondary : .primary)
 
-                            TagDots(tags: file.tags)
-                        }
-                        .padding(8)
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            RoundedRectangle(cornerRadius: 9)
-                                .fill(isSelected(file) ? Color.accentColor.opacity(0.18) : Color.clear)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 9)
-                                .stroke(isSelected(file) ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1)
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture { handleGridTap(file) }
-                        .onDoubleClick { viewModel.openItem(file) }
-                        .contextMenu {
-                            FileItemActions(viewModel: viewModel, file: file, onRename: beginRename)
+                                TagDots(tags: file.tags)
+                            }
+                            .padding(8)
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                RoundedRectangle(cornerRadius: 9)
+                                    .fill(isSelected(file) ? Color.accentColor.opacity(0.18) : Color.clear)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 9)
+                                    .stroke(isSelected(file) ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1)
+                            )
+                            .contentShape(Rectangle())
+                            .onTapGesture { handleGridTap(file) }
+                            .onDoubleClick { viewModel.openItem(file) }
+                            .contextMenu {
+                                FileItemActions(viewModel: viewModel, file: file, onRename: beginRename)
+                            }
+
+                            if settings.showItemCheckBoxes {
+                                Button {
+                                    viewModel.toggleSelection(file.path)
+                                } label: {
+                                    Image(systemName: isSelected(file) ? "checkmark.square.fill" : "square")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(isSelected(file) ? .accentColor : .secondary)
+                                        .padding(3)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 4)
+                                                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.85))
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                                .padding(4)
+                                .help(isSelected(file) ? "Bỏ chọn" : "Chọn")
+                            }
                         }
                     }
                 }
@@ -462,25 +504,45 @@ struct FileListView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 8) {
                     ForEach(viewModel.displayedFiles) { file in
-                        VStack(spacing: 4) {
-                            FileThumbnail(file: file, size: 54)
-                            Text(file.name)
-                                .font(.caption2)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .frame(width: 78)
-                            TagDots(tags: file.tags)
-                        }
-                        .padding(6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7)
-                                .fill(isSelected(file) ? Color.accentColor.opacity(0.18) : Color.clear)
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture { handleGridTap(file) }
-                        .onDoubleClick { viewModel.openItem(file) }
-                        .contextMenu {
-                            FileItemActions(viewModel: viewModel, file: file, onRename: beginRename)
+                        ZStack(alignment: .topLeading) {
+                            VStack(spacing: 4) {
+                                FileThumbnail(file: file, size: 54)
+                                Text(file.name)
+                                    .font(.caption2)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                    .frame(width: 78)
+                                TagDots(tags: file.tags)
+                            }
+                            .padding(6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 7)
+                                    .fill(isSelected(file) ? Color.accentColor.opacity(0.18) : Color.clear)
+                            )
+                            .contentShape(Rectangle())
+                            .onTapGesture { handleGridTap(file) }
+                            .onDoubleClick { viewModel.openItem(file) }
+                            .contextMenu {
+                                FileItemActions(viewModel: viewModel, file: file, onRename: beginRename)
+                            }
+
+                            if settings.showItemCheckBoxes {
+                                Button {
+                                    viewModel.toggleSelection(file.path)
+                                } label: {
+                                    Image(systemName: isSelected(file) ? "checkmark.square.fill" : "square")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(isSelected(file) ? .accentColor : .secondary)
+                                        .padding(2)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 3)
+                                                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.85))
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                                .padding(2)
+                                .help(isSelected(file) ? "Bỏ chọn" : "Chọn")
+                            }
                         }
                     }
                 }
@@ -603,6 +665,12 @@ struct FileListView: View {
             viewModel.paste()
         }
         .disabled(!FilePasteboard.hasFiles)
+
+        Divider()
+
+        Toggle(isOn: $settings.showItemCheckBoxes) {
+            Text("Show Item Checkboxes")
+        }
 
         Divider()
 
