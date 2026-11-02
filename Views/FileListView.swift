@@ -1055,6 +1055,7 @@ private struct GalleryPreview: View {
 
 // MARK: - Table Double Click Handler (Native AppKit doubleAction)
 
+@MainActor
 private struct TableDoubleClickHandler: NSViewRepresentable {
     let onDoubleClick: (Int) -> Void
 
@@ -1083,6 +1084,7 @@ private struct TableDoubleClickHandler: NSViewRepresentable {
         Coordinator(handler: onDoubleClick)
     }
 
+    @MainActor
     class Coordinator: NSObject {
         var handler: (Int) -> Void
         weak var tableView: NSTableView?
