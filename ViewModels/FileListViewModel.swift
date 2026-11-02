@@ -65,6 +65,10 @@ class FileListViewModel: ObservableObject {
     /// Dung lượng trống của volume chứa thư mục hiện tại (cho status bar).
     @Published var volumeFreeSpace: UInt64?
 
+    // Double-click tracking cho Views không có native NSTableView doubleAction (Icons, Gallery)
+    var lastClickTime: TimeInterval = 0
+    var lastClickedPath: String?
+
     // MARK: - Tìm kiếm
     @Published var searchQuery: String = ""
     @Published var searchHits: [SearchHit] = []

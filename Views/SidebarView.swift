@@ -54,31 +54,34 @@ struct SidebarView: View {
             if !viewModel.volumes.isEmpty {
                 Section("Locations") {
                     ForEach(viewModel.volumes) { volume in
-                        HStack(spacing: 8) {
-                            Image(systemName: volume.path == "/" ? "internaldrive" : "externaldrive")
-                                .foregroundColor(volume.path == "/" ? .primary : .secondary)
-
-                            Text(volume.name)
-                                .lineLimit(1)
-
-                            Spacer(minLength: 4)
-
-                            if volume.path != "/" {
-                                Button {
-                                    viewModel.ejectVolume(at: volume.path)
-                                } label: {
-                                    Image(systemName: "eject")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
-                                .buttonStyle(.plain)
-                                .help("Eject")
-                            }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
+                        Button {
                             fileListViewModel.navigateTo(path: volume.path)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: volume.path == "/" ? "internaldrive" : "externaldrive")
+                                    .foregroundColor(volume.path == "/" ? .primary : .secondary)
+
+                                Text(volume.name)
+                                    .lineLimit(1)
+
+                                Spacer(minLength: 4)
+
+                                if volume.path != "/" {
+                                    Button {
+                                        viewModel.ejectVolume(at: volume.path)
+                                    } label: {
+                                        Image(systemName: "eject")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help("Eject")
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                         .listRowBackground(rowBackground(for: volume.path))
                     }
                 }
@@ -100,18 +103,21 @@ struct SidebarView: View {
             if settings.showTagsInSidebar {
                 Section("Tags") {
                     ForEach(FinderTag.standard) { tag in
-                        HStack(spacing: 8) {
-                            Image(systemName: "circle.fill")
-                                .font(.system(size: 10))
-                                .foregroundColor(tag.color)
-                            Text(tag.name)
-                                .lineLimit(1)
-                            Spacer(minLength: 4)
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
+                        Button {
                             fileListViewModel.startTagSearch(tag)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "circle.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(tag.color)
+                                Text(tag.name)
+                                    .lineLimit(1)
+                                Spacer(minLength: 4)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                         .help("Search files with this tag")
                     }
                 }
@@ -129,13 +135,16 @@ struct SidebarView: View {
     }
 
     private func sidebarRow(name: String, path: String, icon: String) -> some View {
-        Label(name, systemImage: icon)
-            .lineLimit(1)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                fileListViewModel.navigateTo(path: path)
-            }
-            .listRowBackground(rowBackground(for: path))
+        Button {
+            fileListViewModel.navigateTo(path: path)
+        } label: {
+            Label(name, systemImage: icon)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(rowBackground(for: path))
     }
 
     private func rowBackground(for path: String) -> Color {
@@ -196,23 +205,26 @@ private struct DirectoryTreeRow: View {
     }
 
     private var rowLabel: some View {
-        Label(node.name, systemImage: node.isExpanded ? "folder.fill" : "folder")
-            .foregroundColor(selectedPath == node.path ? .accentColor : .primary)
-            .lineLimit(1)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                onSelect(node.path)
+        Button {
+            onSelect(node.path)
+        } label: {
+            Label(node.name, systemImage: node.isExpanded ? "folder.fill" : "folder")
+                .foregroundColor(selectedPath == node.path ? .accentColor : .primary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("Open") { onSelect(node.path) }
+            Button("Open in Terminal") { TerminalService.shared.openTerminal(at: node.path) }
+            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: node.path)]) }
+            Divider()
+            Button("Copy Path") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(node.path, forType: .string)
             }
-            .contextMenu {
-                Button("Open") { onSelect(node.path) }
-                Button("Open in Terminal") { TerminalService.shared.openTerminal(at: node.path) }
-                Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: node.path)]) }
-                Divider()
-                Button("Copy Path") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(node.path, forType: .string)
-                }
-            }
+        }
     }
 
     private var rowBackground: Color {

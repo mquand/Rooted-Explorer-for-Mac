@@ -187,7 +187,13 @@ struct PathBar: View {
 
     // MARK: - Quét danh sách thư mục con
 
+    private static var subdirsCache: [String: (date: Date, dirs: [(name: String, path: String)])] = [:]
+
     static func subdirectories(at path: String) -> [(name: String, path: String)] {
+        if let cached = subdirsCache[path], Date().timeIntervalSince(cached.date) < 3.0 {
+            return cached.dirs
+        }
+
         let url = URL(fileURLWithPath: path, isDirectory: true)
         let keys: Set<URLResourceKey> = [.isDirectoryKey, .isPackageKey]
         guard let contents = try? FileManager.default.contentsOfDirectory(
@@ -195,6 +201,7 @@ struct PathBar: View {
             includingPropertiesForKeys: Array(keys),
             options: [.skipsHiddenFiles, .skipsPackageDescendants]
         ) else {
+            subdirsCache[path] = (Date(), [])
             return []
         }
 
@@ -212,10 +219,9 @@ struct PathBar: View {
             $0.name.localizedStandardCompare($1.name) == .orderedAscending
         }
 
-        if sorted.count > 60 {
-            return Array(sorted.prefix(60))
-        }
-        return sorted
+        let final = sorted.count > 60 ? Array(sorted.prefix(60)) : sorted
+        subdirsCache[path] = (Date(), final)
+        return final
     }
 
     // MARK: - Đường dẫn -> các cấp

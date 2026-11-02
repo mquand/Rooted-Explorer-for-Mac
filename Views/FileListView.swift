@@ -376,6 +376,14 @@ struct FileListView: View {
             .width(min: 130, max: 180)
         }
         .tableStyle(.inset(alternatesRowBackgrounds: true))
+        .background(
+            TableDoubleClickHandler { row in
+                if row >= 0 && row < viewModel.displayedFiles.count {
+                    let file = viewModel.displayedFiles[row]
+                    viewModel.openItem(file)
+                }
+            }
+        )
         .contextMenu { backgroundMenu }
     }
 
@@ -389,7 +397,6 @@ struct FileListView: View {
             .if(settings.singleClickOpen) { view in
                 view.onTapGesture { handleSingleClick(file) }
             }
-            .onDoubleClick { viewModel.openItem(file) }
             .contextMenu {
                 FileItemActions(viewModel: viewModel, file: file, onRename: beginRename)
             }
@@ -430,7 +437,6 @@ struct FileListView: View {
                             )
                             .contentShape(Rectangle())
                             .onTapGesture { handleGridTap(file) }
-                            .onDoubleClick { viewModel.openItem(file) }
                             .contextMenu {
                                 FileItemActions(viewModel: viewModel, file: file, onRename: beginRename)
                             }
@@ -521,7 +527,6 @@ struct FileListView: View {
                             )
                             .contentShape(Rectangle())
                             .onTapGesture { handleGridTap(file) }
-                            .onDoubleClick { viewModel.openItem(file) }
                             .contextMenu {
                                 FileItemActions(viewModel: viewModel, file: file, onRename: beginRename)
                             }
@@ -622,7 +627,21 @@ struct FileListView: View {
     }
 
     private func handleGridTap(_ file: FileItem) {
-        let flags = NSEvent.modifierFlags
+        let flags = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+        // Kiểm tra double-click chuẩn hệ thống macOS (dựa vào thời gian và thiết lập hệ thống)
+        let now = Date().timeIntervalSinceReferenceDate
+        let isDoubleClick = viewModel.lastClickedPath == file.path && (now - viewModel.lastClickTime) < NSEvent.doubleClickInterval
+
+        if isDoubleClick && flags.isEmpty {
+            viewModel.lastClickTime = 0
+            viewModel.lastClickedPath = nil
+            viewModel.openItem(file)
+            return
+        }
+
+        viewModel.lastClickTime = now
+        viewModel.lastClickedPath = file.path
 
         if flags.contains(.command) {
             viewModel.toggleSelection(file.path)
@@ -761,19 +780,21 @@ struct FileListView: View {
         guard let window = event.window, window === NSApp.keyWindow else { return }
 
         // 1. Huỷ trạng thái sửa đường dẫn & nhả focus khi bấm ra bên ngoài
-        if let textResponder = window.firstResponder as? NSTextView {
-            let clickLocation = event.locationInWindow
-            let locationInResponder = textResponder.convert(clickLocation, from: nil)
-            let expandedBounds = textResponder.bounds.insetBy(dx: -12, dy: -8)
+        if viewModel.isEditingPath {
+            if let textResponder = window.firstResponder as? NSTextView {
+                let clickLocation = event.locationInWindow
+                let locationInResponder = textResponder.convert(clickLocation, from: nil)
+                let expandedBounds = textResponder.bounds.insetBy(dx: -12, dy: -8)
 
-            if !expandedBounds.contains(locationInResponder) {
-                if viewModel.isEditingPath {
+                if !expandedBounds.contains(locationInResponder) {
                     viewModel.cancelPathEditing()
+                    DispatchQueue.main.async {
+                        window.makeFirstResponder(nil)
+                    }
                 }
-                window.makeFirstResponder(nil)
+            } else {
+                viewModel.cancelPathEditing()
             }
-        } else if viewModel.isEditingPath {
-            viewModel.cancelPathEditing()
         }
 
         // 2. Bỏ chọn khi click vào vùng trống của bảng (NSTableView rỗng bên dưới các row)
@@ -787,12 +808,13 @@ struct FileListView: View {
 
         guard let hitView = window.contentView?.hitTest(event.locationInWindow) else { return }
 
-        if let tableView = (hitView as? NSTableView) ?? (hitView.enclosingScrollView?.documentView as? NSTableView) {
-            let pointInTable = tableView.convert(event.locationInWindow, from: nil)
-            let row = tableView.row(at: pointInTable)
-            if row < 0 {
-                Task { @MainActor in
-                    self.viewModel.deselectAll()
+        // Chỉ bỏ chọn khi người dùng click vào vùng trống thật sự của NSTableView (không phải row, cell, header hay scroller)
+        if hitView is NSTableView || hitView is NSClipView {
+            if let tableView = (hitView as? NSTableView) ?? (hitView.enclosingScrollView?.documentView as? NSTableView) {
+                let pointInTable = tableView.convert(event.locationInWindow, from: nil)
+                let row = tableView.row(at: pointInTable)
+                if row < 0 {
+                    viewModel.deselectAll()
                 }
             }
         }
@@ -1028,5 +1050,81 @@ private struct GalleryPreview: View {
         .task(id: file.path) {
             image = await ThumbnailService.shared.thumbnail(for: file.path, size: 1400)
         }
+    }
+}
+
+// MARK: - Table Double Click Handler (Native AppKit doubleAction)
+
+private struct TableDoubleClickHandler: NSViewRepresentable {
+    let onDoubleClick: (Int) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            if let tableView = findTableView(from: view) {
+                context.coordinator.attach(to: tableView, handler: onDoubleClick)
+            }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.handler = onDoubleClick
+        if context.coordinator.tableView == nil {
+            DispatchQueue.main.async {
+                if let tableView = findTableView(from: nsView) {
+                    context.coordinator.attach(to: tableView, handler: onDoubleClick)
+                }
+            }
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(handler: onDoubleClick)
+    }
+
+    class Coordinator: NSObject {
+        var handler: (Int) -> Void
+        weak var tableView: NSTableView?
+
+        init(handler: @escaping (Int) -> Void) {
+            self.handler = handler
+        }
+
+        func attach(to tableView: NSTableView, handler: @escaping (Int) -> Void) {
+            self.tableView = tableView
+            self.handler = handler
+            tableView.target = self
+            tableView.doubleAction = #selector(onTableDoubleClick(_:))
+        }
+
+        @objc func onTableDoubleClick(_ sender: NSTableView) {
+            let row = sender.clickedRow
+            if row >= 0 {
+                handler(row)
+            }
+        }
+    }
+
+    private func findTableView(from view: NSView) -> NSTableView? {
+        var current: NSView? = view
+        while let c = current {
+            if let tv = c as? NSTableView {
+                return tv
+            }
+            if let sv = c as? NSScrollView, let tv = sv.documentView as? NSTableView {
+                return tv
+            }
+            for sub in c.subviews {
+                if let tv = sub as? NSTableView {
+                    return tv
+                }
+                if let sv = sub as? NSScrollView, let tv = sv.documentView as? NSTableView {
+                    return tv
+                }
+            }
+            current = c.superview
+        }
+        return nil
     }
 }
