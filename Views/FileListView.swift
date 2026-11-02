@@ -654,7 +654,7 @@ struct FileListView: View {
         return Self.sizeFormatter.string(fromByteCount: Int64(total))
     }
 
-    private static let sizeFormatter: ByteCountFormatter = {
+    static let sizeFormatter: ByteCountFormatter = {
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useKB, .useMB, .useGB]
         formatter.countStyle = .file
