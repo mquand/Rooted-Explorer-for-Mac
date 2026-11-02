@@ -60,6 +60,14 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(showItemCheckBoxes, forKey: Keys.showItemCheckBoxes) }
     }
 
+    @Published var customFavorites: [String] {
+        didSet { defaults.set(customFavorites, forKey: Keys.customFavorites) }
+    }
+
+    @Published var recentFolders: [String] {
+        didSet { defaults.set(recentFolders, forKey: Keys.recentFolders) }
+    }
+
     private let defaults: UserDefaults
 
     private enum Keys {
@@ -70,6 +78,8 @@ final class AppSettings: ObservableObject {
         static let autoUpdate = "automaticallyChecksForUpdates"
         static let showTagsInSidebar = "showTagsInSidebar"
         static let showItemCheckBoxes = "showItemCheckBoxes"
+        static let customFavorites = "customFavorites"
+        static let recentFolders = "recentFolders"
         static let skippedVersion = "skippedUpdateVersion"
     }
 
@@ -83,6 +93,8 @@ final class AppSettings: ObservableObject {
         automaticallyChecksForUpdates = defaults.object(forKey: Keys.autoUpdate) as? Bool ?? true
         showTagsInSidebar = defaults.object(forKey: Keys.showTagsInSidebar) as? Bool ?? true
         showItemCheckBoxes = defaults.object(forKey: Keys.showItemCheckBoxes) as? Bool ?? true
+        customFavorites = defaults.stringArray(forKey: Keys.customFavorites) ?? []
+        recentFolders = defaults.stringArray(forKey: Keys.recentFolders) ?? []
     }
 
     var skippedVersion: String? {

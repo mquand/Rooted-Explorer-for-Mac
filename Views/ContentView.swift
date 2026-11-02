@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var fileListViewModel = FileListViewModel()
+    @StateObject private var tabManager = TabManager()
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var updates: UpdateService
@@ -12,18 +12,34 @@ struct ContentView: View {
                 UpdateBanner(release: release)
             }
 
+            TabBarView(tabManager: tabManager)
+            Divider()
+
             NavigationSplitView(columnVisibility: $columnVisibility) {
-                SidebarView(fileListViewModel: fileListViewModel)
+                SidebarView(fileListViewModel: tabManager.activeTab.activeViewModel)
                     .frame(minWidth: 210, idealWidth: 260)
             } detail: {
-                FileListView(
-                    viewModel: fileListViewModel,
-                    columnVisibility: $columnVisibility
-                )
+                tabDetailView
             }
         }
         .navigationTitle("Rooted")
-        .focusedSceneValue(\.fileListViewModel, fileListViewModel)
+        .focusedSceneValue(\.fileListViewModel, tabManager.activeTab.activeViewModel)
+        .background(
+            Group {
+                Button("") { tabManager.newTab() }
+                    .keyboardShortcut("t", modifiers: .command)
+                Button("") { tabManager.closeActiveTab() }
+                    .keyboardShortcut("w", modifiers: .command)
+                Button("") { tabManager.activeTab.toggleDualPane() }
+                    .keyboardShortcut("d", modifiers: [.command, .option])
+                Button("") { tabManager.selectNextTab() }
+                    .keyboardShortcut("}", modifiers: .command)
+                Button("") { tabManager.selectPreviousTab() }
+                    .keyboardShortcut("{", modifiers: .command)
+            }
+            .opacity(0)
+            .allowsHitTesting(false)
+        )
         .task {
             await updates.checkOnLaunch()
         }
@@ -34,6 +50,39 @@ struct ContentView: View {
                 }
                 await updates.checkForUpdates(userInitiated: false)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var tabDetailView: some View {
+        let tab = tabManager.activeTab
+        if tab.isDualPane, let rightVM = tab.rightViewModel {
+            HStack(spacing: 0) {
+                FileListView(
+                    viewModel: tab.leftViewModel,
+                    columnVisibility: $columnVisibility
+                )
+                .overlay(
+                    Rectangle()
+                        .stroke(tab.activePane == .left ? Color.accentColor.opacity(0.4) : Color.clear, lineWidth: 2)
+                )
+
+                Divider()
+
+                FileListView(
+                    viewModel: rightVM,
+                    columnVisibility: .constant(.detailOnly)
+                )
+                .overlay(
+                    Rectangle()
+                        .stroke(tab.activePane == .right ? Color.accentColor.opacity(0.4) : Color.clear, lineWidth: 2)
+                )
+            }
+        } else {
+            FileListView(
+                viewModel: tab.leftViewModel,
+                columnVisibility: $columnVisibility
+            )
         }
     }
 }

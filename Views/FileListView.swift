@@ -14,14 +14,58 @@ struct FileListView: View {
     @State private var keyMonitor: Any?
     @State private var mouseMonitor: Any?
     @FocusState private var isSearchFocused: Bool
+    @FocusState private var isQuickFilterFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
             topBar
             Divider()
-            content
+
+            if !viewModel.quickFilter.isEmpty || viewModel.showQuickFilterBar {
+                quickFilterBar
+                Divider()
+            }
+
+            HStack(spacing: 0) {
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+                        handleDrop(providers: providers)
+                    }
+
+                if viewModel.showPreviewPane {
+                    Divider()
+                    FilePreviewPane(viewModel: viewModel, settings: settings)
+                        .transition(.move(edge: .trailing))
+                }
+            }
+
             Divider()
             statusBar
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            viewModel.onSelectPane?()
+        }
+        .sheet(isPresented: $viewModel.showBatchRename) {
+            BatchRenameSheet(viewModel: viewModel, files: viewModel.selectedFileItems)
+        }
+        .alert(
+            "Mã kiểm tra tệp (Checksum)",
+            isPresented: $viewModel.showChecksumAlert,
+            presenting: viewModel.checksumResult
+        ) { result in
+            Button("Sao chép SHA-256") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(result.sha256, forType: .string)
+            }
+            Button("Sao chép MD5") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(result.md5, forType: .string)
+            }
+            Button("Đóng", role: .cancel) {}
+        } message: { result in
+            Text("\(result.name)\n\nSHA-256:\n\(result.sha256)\n\nMD5:\n\(result.md5)")
         }
         .alert("Rename", isPresented: $isRenaming) {
             TextField("Name", text: $renameName)
@@ -171,6 +215,22 @@ struct FileListView: View {
                 }
                 .disabled(viewModel.selectedItems.isEmpty)
 
+                navButton("chevron.left.forwardslash.chevron.right", help: "Open in VS Code") {
+                    TerminalService.shared.openIDE(at: viewModel.currentPath, ide: .vscode)
+                }
+
+                navButton(viewModel.showPreviewPane ? "sidebar.right" : "sidebar.trailing", help: "Toggle Preview Pane (⌥P)") {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        viewModel.showPreviewPane.toggle()
+                    }
+                }
+                .foregroundColor(viewModel.showPreviewPane ? .accentColor : .primary)
+
+                navButton("line.3.horizontal.decrease.circle", help: "Quick Filter (/)") {
+                    viewModel.showQuickFilterBar.toggle()
+                }
+                .foregroundColor((!viewModel.quickFilter.isEmpty || viewModel.showQuickFilterBar) ? .accentColor : .primary)
+
                 navButton("terminal", help: "Open in Terminal") {
                     TerminalService.shared.openTerminal(at: viewModel.currentPath)
                 }
@@ -271,6 +331,73 @@ struct FileListView: View {
         }
         .buttonStyle(.borderless)
         .help(help)
+    }
+
+    // MARK: - Quick Filter Bar
+
+    private var quickFilterBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                .foregroundColor(.accentColor)
+
+            Text("Lọc nhanh:")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.secondary)
+
+            TextField("Gõ từ khoá để lọc file trực tiếp... (Esc để thoát)", text: $viewModel.quickFilter)
+                .textFieldStyle(.plain)
+                .font(.caption)
+                .focused($isQuickFilterFocused)
+
+            if !viewModel.quickFilter.isEmpty {
+                Button {
+                    viewModel.quickFilter = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Button {
+                viewModel.quickFilter = ""
+                viewModel.showQuickFilterBar = false
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Đóng thanh lọc nhanh")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .onAppear {
+            isQuickFilterFocused = true
+        }
+    }
+
+    private func handleDrop(providers: [NSItemProvider], targetFolder: String? = nil) -> Bool {
+        var urls: [URL] = []
+        let group = DispatchGroup()
+        for provider in providers {
+            group.enter()
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                if let url = url {
+                    DispatchQueue.main.async {
+                        urls.append(url)
+                    }
+                }
+                group.leave()
+            }
+        }
+        group.notify(queue: .main) {
+            if !urls.isEmpty {
+                viewModel.importFiles(urls: urls, to: targetFolder)
+            }
+        }
+        return true
     }
 
     // MARK: - Content
@@ -378,6 +505,14 @@ struct FileListView: View {
             .contentShape(Rectangle())
             .if(settings.singleClickOpen) { view in
                 view.onTapGesture { handleSingleClick(file) }
+            }
+            .onDrag {
+                NSItemProvider(contentsOf: URL(fileURLWithPath: file.path)) ?? NSItemProvider()
+            }
+            .if(file.isDirectory) { view in
+                view.onDrop(of: [.fileURL], isTargeted: nil) { providers in
+                    handleDrop(providers: providers, targetFolder: file.path)
+                }
             }
             .contextMenu {
                 FileItemActions(viewModel: viewModel, file: file, onRename: beginRename)
@@ -786,7 +921,22 @@ struct FileListView: View {
             viewModel.openFocusedItem()
             return nil
 
-        case 53: // Escape: thoát tìm kiếm hoặc bỏ chọn tất cả
+        case 35 where flags.contains(.option): // ⌥P: Toggle Preview Pane
+            withAnimation(.easeInOut(duration: 0.15)) {
+                viewModel.showPreviewPane.toggle()
+            }
+            return nil
+
+        case 44 where isPlain: // /: Mở Quick Filter
+            viewModel.showQuickFilterBar = true
+            return nil
+
+        case 53: // Escape: thoát tìm kiếm, lọc nhanh hoặc bỏ chọn tất cả
+            if !viewModel.quickFilter.isEmpty || viewModel.showQuickFilterBar {
+                viewModel.quickFilter = ""
+                viewModel.showQuickFilterBar = false
+                return nil
+            }
             if viewModel.isSearchActive {
                 viewModel.leaveSearch()
                 return nil
@@ -985,6 +1135,9 @@ private struct FileIconCard: View {
             )
             .contentShape(Rectangle())
             .onTapGesture { onGridTap(file) }
+            .onDrag {
+                NSItemProvider(contentsOf: URL(fileURLWithPath: file.path)) ?? NSItemProvider()
+            }
             .contextMenu {
                 FileItemActions(viewModel: viewModel, file: file, onRename: onRename)
             }
@@ -1057,6 +1210,9 @@ private struct FileGalleryThumbnail: View {
             )
             .contentShape(Rectangle())
             .onTapGesture { onGridTap(file) }
+            .onDrag {
+                NSItemProvider(contentsOf: URL(fileURLWithPath: file.path)) ?? NSItemProvider()
+            }
             .contextMenu {
                 FileItemActions(viewModel: viewModel, file: file, onRename: onRename)
             }

@@ -12,6 +12,17 @@ struct FileItemActions: View {
                 viewModel.openItem(file)
             }
 
+            if file.isDirectory {
+                Button("Open in New Tab") {
+                    viewModel.onOpenNewTab?(file.path)
+                }
+            }
+
+            Button("Open in VS Code") {
+                let path = file.isDirectory ? file.path : (file.path as NSString).deletingLastPathComponent
+                TerminalService.shared.openIDE(at: path, ide: .vscode)
+            }
+
             Button("Quick Look") {
                 QuickLookController.shared.toggle(urls: [URL(fileURLWithPath: file.path)])
             }
@@ -38,11 +49,49 @@ struct FileItemActions: View {
                 viewModel.duplicateSelectedItems()
             }
 
+            Menu("Copy Special") {
+                Button("Copy Full Path") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(file.path, forType: .string)
+                }
+                Button("Copy Relative Path") {
+                    viewModel.copyRelativePath(for: file)
+                }
+                if !file.isDirectory {
+                    Button("Copy File Content") {
+                        viewModel.copyFileContent(for: file)
+                    }
+                }
+            }
+
             Divider()
 
             Button("Rename…") {
                 viewModel.ensureSelected(file.path)
                 onRename(file)
+            }
+
+            if viewModel.selectedItems.count > 1 {
+                Button("Batch Rename (\(viewModel.selectedItems.count) items)…") {
+                    viewModel.showBatchRename = true
+                }
+            }
+
+            Button("Compress to ZIP") {
+                viewModel.ensureSelected(file.path)
+                viewModel.compressSelection()
+            }
+
+            if file.name.lowercased().hasSuffix(".zip") {
+                Button("Extract Archive") {
+                    viewModel.extractArchive(at: file.path)
+                }
+            }
+
+            if !file.isDirectory {
+                Button("Calculate Checksum (MD5 / SHA-256)…") {
+                    viewModel.calculateChecksum(for: file)
+                }
             }
 
             Button("Move to Trash") {
@@ -61,6 +110,10 @@ struct FileItemActions: View {
             ideMenu
 
             if file.isDirectory {
+                Button(viewModel.isFavorite(path: file.path) ? "Unpin from Favorites" : "Pin to Favorites") {
+                    viewModel.toggleFavorite(path: file.path)
+                }
+
                 Button(viewModel.folderSizes[file.path] == nil ? "Calculate Size" : "Size Calculated") {
                     viewModel.calculateSize(for: file)
                 }

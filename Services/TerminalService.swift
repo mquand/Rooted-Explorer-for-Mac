@@ -37,6 +37,22 @@ final class TerminalService: @unchecked Sendable {
         task.arguments = ["-a", app.rawValue, path]
         try? task.run()
     }
+
+    /// Chạy lệnh shell tuỳ ý trong Terminal tại thư mục chỉ định
+    func runCommandInTerminal(_ command: String, at path: String) {
+        let escapedPath = path.replacingOccurrences(of: "\"", with: "\\\"")
+        let escapedCmd = command.replacingOccurrences(of: "\"", with: "\\\"")
+        let script = """
+        tell application "Terminal"
+            activate
+            do script "cd \\"\(escapedPath)\\" && \(escapedCmd)"
+        end tell
+        """
+        if let appleScript = NSAppleScript(source: script) {
+            var error: NSDictionary?
+            appleScript.executeAndReturnError(&error)
+        }
+    }
     
     /// Mở IDE tại thư mục
     func openIDE(at path: String, ide: IDE) {
@@ -54,7 +70,7 @@ final class TerminalService: @unchecked Sendable {
         }
     }
     
-    private func openVSCode(at path: String) {
+    func openVSCode(at path: String) {
         // Thử với code command
         let codePaths = [
             "/usr/local/bin/code",
@@ -79,7 +95,7 @@ final class TerminalService: @unchecked Sendable {
         try? task.run()
     }
     
-    private func openCursor(at path: String) {
+    func openCursor(at path: String) {
         let cursorPaths = [
             "/usr/local/bin/cursor",
             "/opt/homebrew/bin/cursor",

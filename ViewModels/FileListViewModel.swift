@@ -43,16 +43,31 @@ class FileListViewModel: ObservableObject {
     @Published var showDeleteImmediatelyConfirm: Bool = false
     @Published var isEditingPath: Bool = false
     @Published var isMultiSelectMode: Bool = false
+    @Published var showPreviewPane: Bool = false
+    @Published var showBatchRename: Bool = false
+    @Published var showChecksumAlert: Bool = false
+    @Published var checksumResult: (name: String, sha256: String, md5: String)?
+    @Published var quickFilter: String = ""
+    @Published var showQuickFilterBar: Bool = false
+
+    var onOpenNewTab: ((String) -> Void)?
+    var onSelectPane: (() -> Void)?
 
     var displayedFiles: [FileItem] {
+        var base: [FileItem]
         switch filterMode {
         case .all:
-            return files
+            base = files
         case .folders:
-            return files.filter { $0.isDirectory }
+            base = files.filter { $0.isDirectory }
         case .files:
-            return files.filter { !$0.isDirectory }
+            base = files.filter { !$0.isDirectory }
         }
+
+        if !quickFilter.isEmpty {
+            base = base.filter { $0.name.localizedCaseInsensitiveContains(quickFilter) }
+        }
+        return base
     }
 
     /// Sắp xếp hiện tại — bind trực tiếp với `sortOrder` của Table nên header
@@ -108,11 +123,11 @@ class FileListViewModel: ObservableObject {
     private var typeAheadDate: Date = .distantPast
     private var lastSelectedPath: String?
 
-    init() {
+    init(initialPath: String? = nil) {
         let settings = AppSettings.shared
         self.settings = settings
 
-        let startPath = FileManager.default.homeDirectoryForCurrentUser.path
+        let startPath = initialPath ?? FileManager.default.homeDirectoryForCurrentUser.path
         currentPath = startPath
         pathInput = startPath
         history = [startPath]
@@ -302,6 +317,24 @@ class FileListViewModel: ObservableObject {
             return
         }
 
+        // Kiểm tra nếu là lệnh shell (CLI Address Bar: code ., git ..., npm ...):
+        let commandPrefixes = [
+            "code", "cursor", "npm", "yarn", "pnpm", "bun", "git",
+            "python", "python3", "node", "cargo", "make", "docker",
+            "brew", "cat", "vim", "nano", "open", "sh", "bash", "zsh", "ls"
+        ]
+        let firstWord = trimmed.split(separator: " ").first.map(String.init) ?? ""
+
+        if commandPrefixes.contains(firstWord) || trimmed.starts(with: "./") || trimmed.starts(with: ">") {
+            let actualCommand = trimmed.starts(with: ">")
+                ? String(trimmed.dropFirst()).trimmingCharacters(in: .whitespaces)
+                : trimmed
+            TerminalService.shared.runCommandInTerminal(actualCommand, at: currentPath)
+            pathInput = currentPath
+            focusPathField = false
+            return
+        }
+
         let expanded = (trimmed as NSString).expandingTildeInPath
         navigateTo(path: expanded)
         pathInput = currentPath
@@ -337,6 +370,7 @@ class FileListViewModel: ObservableObject {
     }
 
     private func recordVisit(_ path: String) {
+        recordRecentFolder(path)
         if historyIndex >= 0, historyIndex < history.count, history[historyIndex] == path {
             return
         }
@@ -347,6 +381,86 @@ class FileListViewModel: ObservableObject {
 
         history.append(path)
         historyIndex = history.count - 1
+    }
+
+    // MARK: - Checksum
+
+    func calculateChecksum(for file: FileItem) {
+        if let hashes = ChecksumUtility.calculateHashes(for: file.path) {
+            checksumResult = (name: file.name, sha256: hashes.sha256, md5: hashes.md5)
+            showChecksumAlert = true
+        }
+    }
+
+    // MARK: - Copy Special
+
+    func copyRelativePath(for file: FileItem) {
+        let relative: String
+        if file.path.hasPrefix(currentPath) {
+            let drop = file.path.dropFirst(currentPath.count)
+            relative = drop.hasPrefix("/") ? String(drop.dropFirst()) : String(drop)
+        } else {
+            relative = file.name
+        }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(relative, forType: .string)
+    }
+
+    func copyFileContent(for file: FileItem) {
+        guard !file.isDirectory else { return }
+        let url = URL(fileURLWithPath: file.path)
+        if let content = try? String(contentsOf: url, encoding: .utf8) {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(content, forType: .string)
+        }
+    }
+
+    // MARK: - Archive (Compress & Extract)
+
+    func compressSelection() {
+        let targets = selectedItems.isEmpty ? [currentPath] : Array(selectedItems)
+        let first = targets.first ?? currentPath
+        let firstName = (first as NSString).lastPathComponent
+        let dest = ((first as NSString).deletingLastPathComponent as NSString)
+            .appendingPathComponent(targets.count == 1 ? "\(firstName).zip" : "Archive.zip")
+
+        if ArchiveService.shared.compress(paths: targets, destinationZip: dest) {
+            refresh()
+        }
+    }
+
+    func extractArchive(at path: String) {
+        guard path.lowercased().hasSuffix(".zip") else { return }
+        let parentDir = (path as NSString).deletingLastPathComponent
+        if ArchiveService.shared.extract(zipPath: path, to: parentDir) {
+            refresh()
+        }
+    }
+
+    // MARK: - Favorites & Recent
+
+    func toggleFavorite(path: String) {
+        var favs = AppSettings.shared.customFavorites
+        if favs.contains(path) {
+            favs.removeAll { $0 == path }
+        } else {
+            favs.append(path)
+        }
+        AppSettings.shared.customFavorites = favs
+    }
+
+    func isFavorite(path: String) -> Bool {
+        AppSettings.shared.customFavorites.contains(path)
+    }
+
+    func recordRecentFolder(_ path: String) {
+        var recents = AppSettings.shared.recentFolders
+        recents.removeAll { $0 == path }
+        recents.insert(path, at: 0)
+        if recents.count > 10 {
+            recents = Array(recents.prefix(10))
+        }
+        AppSettings.shared.recentFolders = recents
     }
 
     func refresh() {
@@ -564,6 +678,36 @@ class FileListViewModel: ObservableObject {
         }
 
         loadFiles()
+    }
+
+    func importFiles(urls: [URL], to targetDirectory: String? = nil) {
+        let destDirPath = targetDirectory ?? currentPath
+        let destDir = URL(fileURLWithPath: destDirPath, isDirectory: true)
+        let fm = FileManager.default
+
+        for source in urls {
+            if destDirPath.hasPrefix(source.path + "/") || destDirPath == source.path {
+                continue
+            }
+            var candidate = destDir.appendingPathComponent(source.lastPathComponent)
+            var idx = 1
+            while fm.fileExists(atPath: candidate.path) {
+                let name = source.lastPathComponent
+                let nsName = name as NSString
+                let ext = nsName.pathExtension
+                let base = nsName.deletingPathExtension
+                let newName = ext.isEmpty ? "\(base) copy \(idx)" : "\(base) copy \(idx).\(ext)"
+                candidate = destDir.appendingPathComponent(newName)
+                idx += 1
+            }
+
+            do {
+                try fm.copyItem(at: source, to: candidate)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+        refresh()
     }
 
     // MARK: - File operations

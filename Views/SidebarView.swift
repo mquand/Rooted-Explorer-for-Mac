@@ -49,6 +49,64 @@ struct SidebarView: View {
                 ForEach(favorites) { item in
                     sidebarRow(name: item.name, path: item.path, icon: item.icon)
                 }
+
+                ForEach(settings.customFavorites, id: \.self) { path in
+                    let name = (path as NSString).lastPathComponent
+                    Button {
+                        fileListViewModel.navigateTo(path: path)
+                    } label: {
+                        Label(name, systemImage: "folder.fill")
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(rowBackground(for: path))
+                    .contextMenu {
+                        Button("Unpin from Favorites") {
+                            settings.customFavorites.removeAll { $0 == path }
+                        }
+                    }
+                }
+            }
+            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+                for provider in providers {
+                    _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                        guard let url = url else { return }
+                        var isDir: ObjCBool = false
+                        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
+                            DispatchQueue.main.async {
+                                if !settings.customFavorites.contains(url.path) {
+                                    settings.customFavorites.append(url.path)
+                                }
+                            }
+                        }
+                    }
+                }
+                return true
+            }
+
+            if !settings.recentFolders.isEmpty {
+                Section("Recent") {
+                    ForEach(settings.recentFolders, id: \.self) { path in
+                        let name = (path as NSString).lastPathComponent
+                        Button {
+                            fileListViewModel.navigateTo(path: path)
+                        } label: {
+                            Label(name, systemImage: "clock")
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .listRowBackground(rowBackground(for: path))
+                        .contextMenu {
+                            Button("Clear Recent Folders") {
+                                settings.recentFolders.removeAll()
+                            }
+                        }
+                    }
+                }
             }
 
             if !viewModel.volumes.isEmpty {
