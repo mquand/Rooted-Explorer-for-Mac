@@ -7,6 +7,7 @@ struct SidebarView: View {
     @EnvironmentObject private var settings: AppSettings
 
     @State private var favorites: [FavoriteLocation] = []
+    @State private var isCDriveExpanded: Bool = true
 
     private var selectedPath: String {
         fileListViewModel.currentPath
@@ -130,30 +131,58 @@ struct SidebarView: View {
             }
 
             Section("This PC") {
-                ForEach(displayVolumes, id: \.volume.path) { item in
+                // Ổ đĩa C: (Local Disk) kèm cây thư mục có thể mở rộng
+                DisclosureGroup(
+                    isExpanded: $isCDriveExpanded
+                ) {
+                    ForEach(viewModel.rootNodes) { node in
+                        DirectoryTreeRow(
+                            node: node,
+                            selectedPath: selectedPath,
+                            sidebarViewModel: viewModel,
+                            onSelect: { fileListViewModel.navigateTo(path: $0) }
+                        )
+                    }
+                } label: {
+                    Button {
+                        fileListViewModel.navigateTo(path: "/")
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "internaldrive.fill")
+                                .foregroundColor(selectedPath == "/" ? .accentColor : .primary)
+                            Text("Local Disk (C:)")
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .listRowBackground(rowBackground(for: "/"))
+
+                // Các ổ đĩa khác (D:, E:...)
+                ForEach(displayVolumes.filter { $0.letter != "C" }, id: \.volume.path) { item in
                     Button {
                         fileListViewModel.navigateTo(path: item.volume.path)
                     } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: item.letter == "C" ? "internaldrive.fill" : "externaldrive.fill")
-                                .foregroundColor(item.letter == "C" ? .accentColor : .secondary)
+                            Image(systemName: "externaldrive.fill")
+                                .foregroundColor(.secondary)
 
-                            Text(item.letter == "C" ? "Local Disk (C:)" : "\(item.volume.name) (\(item.letter):)")
+                            Text("\(item.volume.name) (\(item.letter):)")
                                 .lineLimit(1)
 
                             Spacer(minLength: 4)
 
-                            if item.volume.path != "/" {
-                                Button {
-                                    viewModel.ejectVolume(at: item.volume.path)
-                                } label: {
-                                    Image(systemName: "eject")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
-                                .buttonStyle(.plain)
-                                .help("Eject")
+                            Button {
+                                viewModel.ejectVolume(at: item.volume.path)
+                            } label: {
+                                Image(systemName: "eject")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
                             }
+                            .buttonStyle(.plain)
+                            .help("Eject")
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
@@ -190,6 +219,9 @@ struct SidebarView: View {
         .onAppear {
             loadFavorites()
             viewModel.refreshVolumes()
+            if viewModel.rootNodes.isEmpty {
+                viewModel.loadRootTree()
+            }
             viewModel.revealPath(fileListViewModel.currentPath)
         }
         .onChange(of: fileListViewModel.currentPath) { newPath in
