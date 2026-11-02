@@ -83,6 +83,19 @@ struct SidebarView: View {
                 }
             }
 
+            if !viewModel.rootNodes.isEmpty {
+                Section("Root") {
+                    ForEach(viewModel.rootNodes) { node in
+                        DirectoryTreeRow(
+                            node: node,
+                            selectedPath: selectedPath,
+                            sidebarViewModel: viewModel,
+                            onSelect: { fileListViewModel.navigateTo(path: $0) }
+                        )
+                    }
+                }
+            }
+
             Section("Tags") {
                 ForEach(FinderTag.standard) { tag in
                     HStack(spacing: 8) {
@@ -129,4 +142,73 @@ private struct FavoriteLocation: Identifiable {
     let name: String
     let path: String
     let icon: String
+}
+
+private struct DirectoryTreeRow: View {
+    let node: DirectoryNode
+    let selectedPath: String
+    @ObservedObject var sidebarViewModel: SidebarViewModel
+    let onSelect: (String) -> Void
+
+    private var isExpanded: Binding<Bool> {
+        Binding(
+            get: { node.isExpanded },
+            set: { sidebarViewModel.toggleNode(at: node.path, expanded: $0) }
+        )
+    }
+
+    var body: some View {
+        if node.hasChildren {
+            DisclosureGroup(isExpanded: isExpanded) {
+                if node.isLoaded {
+                    ForEach(node.children) { child in
+                        DirectoryTreeRow(
+                            node: child,
+                            selectedPath: selectedPath,
+                            sidebarViewModel: sidebarViewModel,
+                            onSelect: onSelect
+                        )
+                    }
+                } else {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text("Loading…")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.leading, 12)
+                }
+            } label: {
+                rowLabel
+            }
+            .listRowBackground(rowBackground)
+        } else {
+            rowLabel
+                .listRowBackground(rowBackground)
+        }
+    }
+
+    private var rowLabel: some View {
+        Label(node.name, systemImage: node.isExpanded ? "folder.fill" : "folder")
+            .foregroundColor(selectedPath == node.path ? .accentColor : .primary)
+            .lineLimit(1)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                onSelect(node.path)
+            }
+            .contextMenu {
+                Button("Open") { onSelect(node.path) }
+                Button("Open in Terminal") { TerminalService.shared.openTerminal(at: node.path) }
+                Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: node.path)]) }
+                Divider()
+                Button("Copy Path") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(node.path, forType: .string)
+                }
+            }
+    }
+
+    private var rowBackground: Color {
+        selectedPath == node.path ? Color.accentColor.opacity(0.15) : Color.clear
+    }
 }
