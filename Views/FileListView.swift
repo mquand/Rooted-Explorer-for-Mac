@@ -43,10 +43,6 @@ struct FileListView: View {
             Divider()
             statusBar
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            viewModel.onSelectPane?()
-        }
         .sheet(isPresented: $viewModel.showBatchRename) {
             BatchRenameSheet(viewModel: viewModel, files: viewModel.selectedFileItems)
         }
@@ -108,37 +104,29 @@ struct FileListView: View {
 
     private var topBar: some View {
         VStack(spacing: 4) {
-            HStack(spacing: 6) {
-                navButton("sidebar.left", help: "Show/Hide Sidebar") {
-                    withAnimation {
-                        columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
+            HStack(spacing: 5) {
+                if columnVisibility != .detailOnly {
+                    navButton("sidebar.left", help: "Ẩn / Hiện Sidebar") {
+                        withAnimation {
+                            columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
+                        }
                     }
                 }
 
-                navButton("chevron.left", help: "Back") { viewModel.goBack() }
+                navButton("chevron.left", help: "Quay lại (⌘[)") { viewModel.goBack() }
                     .disabled(!viewModel.canGoBack)
 
-                navButton("chevron.right", help: "Forward") { viewModel.goForward() }
+                navButton("chevron.right", help: "Tiếp theo (⌘])") { viewModel.goForward() }
                     .disabled(!viewModel.canGoForward)
 
-                navButton("arrow.up", help: "Enclosing Folder") { viewModel.navigateToParent() }
+                navButton("arrow.up", help: "Thư mục cha (⌘↑)") { viewModel.navigateToParent() }
 
-                navButton("house", help: "Home") { viewModel.navigateToHome() }
+                navButton("arrow.clockwise", help: "Làm mới (F5 / ⌘R)") { viewModel.refresh() }
 
                 PathBar(viewModel: viewModel)
-                    .frame(minWidth: 140, maxWidth: .infinity)
+                    .frame(minWidth: 100, maxWidth: .infinity)
 
                 searchField
-                searchScopeMenu
-
-                if let branch = viewModel.gitBranch {
-                    HStack(spacing: 3) {
-                        Image(systemName: "arrow.triangle.branch")
-                        Text(branch).lineLimit(1)
-                    }
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                }
 
                 Picker("View", selection: $settings.viewMode) {
                     ForEach(ViewMode.allCases) { mode in
@@ -149,102 +137,28 @@ struct FileListView: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(width: 118)
+                .frame(width: 88)
 
-                Menu {
-                    Picker("Lọc", selection: $viewModel.filterMode) {
-                        ForEach(FileFilterMode.allCases) { mode in
-                            Label(mode.title, systemImage: mode.icon)
-                                .tag(mode)
-                        }
-                    }
-
-                    Divider()
-
-                    Toggle(isOn: $viewModel.isMultiSelectMode) {
-                        Label("Chế độ chọn nhiều file", systemImage: "checkmark.square")
-                    }
-
-                    Toggle(isOn: $settings.showItemCheckBoxes) {
-                        Label("Hỗ trợ hộp kiểm (Checkboxes)", systemImage: "checklist")
-                    }
-
-                    Divider()
-
-                    Button("Chọn tất cả (⌘A)") {
-                        viewModel.selectAll()
-                    }
-
-                    Button("Chọn tất cả thư mục") {
-                        viewModel.selectAllFolders()
-                    }
-
-                    Button("Chọn tất cả tệp tin") {
-                        viewModel.selectAllFiles()
-                    }
-
-                    Button("Đảo ngược vùng chọn") {
-                        viewModel.invertSelection()
-                    }
-
-                    Button("Bỏ chọn tất cả (Esc)") {
-                        viewModel.deselectAll()
-                    }
-                    .disabled(viewModel.selectedItems.isEmpty)
-                } label: {
-                    Image(systemName: viewModel.filterMode == .all ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
-                        .foregroundColor(viewModel.filterMode == .all ? .secondary : .accentColor)
-                }
-                .menuStyle(.borderlessButton)
-                .help("Lọc & Chọn: \(viewModel.filterMode.title)")
+                filterMenu
 
                 navButton(
-                    viewModel.isMultiSelectMode ? "checkmark.square.fill" : "checkmark.square",
-                    help: "Chế độ chọn nhiều file"
+                    viewModel.showPreviewPane ? "sidebar.right" : "sidebar.trailing",
+                    help: "Khung xem trước Preview Pane (⌥P)"
                 ) {
-                    viewModel.isMultiSelectMode.toggle()
-                }
-                .foregroundColor(viewModel.isMultiSelectMode ? .accentColor : .primary)
-
-                navButton(settings.showHiddenFiles ? "eye" : "eye.slash", help: "Show Hidden Files") {
-                    settings.showHiddenFiles.toggle()
-                }
-
-                navButton("trash", help: "Move to Trash (⌘⌫)") {
-                    viewModel.trashSelectedItems()
-                }
-                .disabled(viewModel.selectedItems.isEmpty)
-
-                navButton("chevron.left.forwardslash.chevron.right", help: "Open in VS Code") {
-                    TerminalService.shared.openIDE(at: viewModel.currentPath, ide: .vscode)
-                }
-
-                navButton(viewModel.showPreviewPane ? "sidebar.right" : "sidebar.trailing", help: "Toggle Preview Pane (⌥P)") {
                     withAnimation(.easeInOut(duration: 0.15)) {
                         viewModel.showPreviewPane.toggle()
                     }
                 }
                 .foregroundColor(viewModel.showPreviewPane ? .accentColor : .primary)
 
-                navButton("line.3.horizontal.decrease.circle", help: "Quick Filter (/)") {
-                    viewModel.showQuickFilterBar.toggle()
-                }
-                .foregroundColor((!viewModel.quickFilter.isEmpty || viewModel.showQuickFilterBar) ? .accentColor : .primary)
-
-                navButton("terminal", help: "Open in Terminal") {
-                    TerminalService.shared.openTerminal(at: viewModel.currentPath)
-                }
-
-                navButton("arrow.clockwise", help: "Refresh (F5 / ⌘R)") {
-                    viewModel.refresh()
-                }
+                moreActionsMenu
 
                 if viewModel.isLoading {
                     ProgressView()
                         .controlSize(.small)
                 }
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 8)
             .padding(.top, 6)
 
             if let error = viewModel.errorMessage {
@@ -253,7 +167,7 @@ struct FileListView: View {
                     .foregroundColor(.red)
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 10)
             }
         }
         .padding(.bottom, 6)
@@ -261,6 +175,80 @@ struct FileListView: View {
         .onTapGesture(count: 2) {
             handleTitleBarDoubleClick()
         }
+    }
+
+    private var filterMenu: some View {
+        Menu {
+            Picker("Lọc", selection: $viewModel.filterMode) {
+                ForEach(FileFilterMode.allCases) { mode in
+                    Label(mode.title, systemImage: mode.icon).tag(mode)
+                }
+            }
+
+            Divider()
+
+            Button("Chọn tất cả (⌘A)") { viewModel.selectAll() }
+            Button("Đảo ngược vùng chọn") { viewModel.invertSelection() }
+            Button("Bỏ chọn tất cả (Esc)") { viewModel.deselectAll() }
+                .disabled(viewModel.selectedItems.isEmpty)
+        } label: {
+            Image(systemName: viewModel.filterMode == .all ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                .foregroundColor(viewModel.filterMode == .all ? .secondary : .accentColor)
+        }
+        .menuStyle(.borderlessButton)
+        .help("Lọc: \(viewModel.filterMode.title)")
+    }
+
+    private var moreActionsMenu: some View {
+        Menu {
+            Button {
+                TerminalService.shared.openIDE(at: viewModel.currentPath, ide: .vscode)
+            } label: {
+                Label("Open in VS Code", systemImage: "chevron.left.forwardslash.chevron.right")
+            }
+
+            Button {
+                TerminalService.shared.openTerminal(at: viewModel.currentPath)
+            } label: {
+                Label("Open in Terminal", systemImage: "terminal")
+            }
+
+            Divider()
+
+            Toggle(isOn: $settings.showHiddenFiles) {
+                Label("Hiện file ẩn (⌘⇧.)", systemImage: settings.showHiddenFiles ? "eye" : "eye.slash")
+            }
+
+            Toggle(isOn: $viewModel.isMultiSelectMode) {
+                Label("Chế độ chọn nhiều file", systemImage: "checkmark.square")
+            }
+
+            Button {
+                viewModel.showQuickFilterBar.toggle()
+            } label: {
+                Label("Lọc nhanh file (/)", systemImage: "line.3.horizontal.decrease.circle")
+            }
+
+            Divider()
+
+            Button {
+                showAnalysis = true
+            } label: {
+                Label("Dung lượng bộ nhớ…", systemImage: "chart.pie")
+            }
+
+            Button(role: .destructive) {
+                viewModel.trashSelectedItems()
+            } label: {
+                Label("Chuyển vào thùng rác (⌘⌫)", systemImage: "trash")
+            }
+            .disabled(viewModel.selectedItems.isEmpty)
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .frame(width: 18, height: 18)
+        }
+        .menuStyle(.borderlessButton)
+        .help("Thao tác khác")
     }
 
     private func handleTitleBarDoubleClick() {
@@ -277,9 +265,11 @@ struct FileListView: View {
         HStack(spacing: 4) {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.secondary)
+                .font(.caption2)
 
             TextField("Search", text: $viewModel.searchQuery)
                 .textFieldStyle(.plain)
+                .font(.caption)
                 .focused($isSearchFocused)
 
             if !viewModel.searchQuery.isEmpty {
@@ -288,18 +278,19 @@ struct FileListView: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.secondary)
+                        .font(.caption2)
                 }
                 .buttonStyle(.borderless)
                 .help("Clear search")
             }
         }
-        .padding(.horizontal, 7)
+        .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(Color(nsColor: .controlBackgroundColor))
         )
-        .frame(width: 200)
+        .frame(minWidth: 80, idealWidth: 120, maxWidth: 160)
         .help("Search in this folder (⌘F)")
     }
 
@@ -505,14 +496,6 @@ struct FileListView: View {
             .contentShape(Rectangle())
             .if(settings.singleClickOpen) { view in
                 view.onTapGesture { handleSingleClick(file) }
-            }
-            .onDrag {
-                NSItemProvider(contentsOf: URL(fileURLWithPath: file.path)) ?? NSItemProvider()
-            }
-            .if(file.isDirectory) { view in
-                view.onDrop(of: [.fileURL], isTargeted: nil) { providers in
-                    handleDrop(providers: providers, targetFolder: file.path)
-                }
             }
             .contextMenu {
                 FileItemActions(viewModel: viewModel, file: file, onRename: beginRename)
@@ -824,7 +807,25 @@ struct FileListView: View {
     private func handleMouseDown(_ event: NSEvent) {
         guard let window = event.window, window === NSApp.keyWindow else { return }
 
-        // 1. Huỷ trạng thái sửa đường dẫn & nhả focus khi bấm ra bên ngoài
+        // Báo cho tab biết panel này đang nhận thao tác chuột
+        viewModel.onSelectPane?()
+
+        // 1. Double click vào hàng của bảng (NSTableView) để mở ngay lập tức
+        if event.clickCount == 2 {
+            if let hitView = window.contentView?.hitTest(event.locationInWindow) {
+                if let tableView = (hitView as? NSTableView) ?? (hitView.enclosingScrollView?.documentView as? NSTableView) {
+                    let pointInTable = tableView.convert(event.locationInWindow, from: nil)
+                    let row = tableView.row(at: pointInTable)
+                    if row >= 0 && row < viewModel.displayedFiles.count {
+                        let file = viewModel.displayedFiles[row]
+                        viewModel.openItem(file)
+                        return
+                    }
+                }
+            }
+        }
+
+        // 2. Huỷ trạng thái sửa đường dẫn & nhả focus khi bấm ra bên ngoài
         if viewModel.isEditingPath {
             if let textResponder = window.firstResponder as? NSTextView {
                 let clickLocation = event.locationInWindow
@@ -1039,9 +1040,7 @@ private struct FileNameCell: View {
 
     private var showCheckbox: Bool {
         guard settings.showItemCheckBoxes else { return false }
-        if isMultiSelecting { return true }
-        if isHovered { return true }
-        return false
+        return isMultiSelecting
     }
 
     var body: some View {
@@ -1104,9 +1103,7 @@ private struct FileIconCard: View {
 
     private var showCheckbox: Bool {
         guard settings.showItemCheckBoxes else { return false }
-        if isMultiSelecting { return true }
-        if isHovered { return true }
-        return false
+        return isMultiSelecting
     }
 
     var body: some View {
@@ -1187,9 +1184,7 @@ private struct FileGalleryThumbnail: View {
 
     private var showCheckbox: Bool {
         guard settings.showItemCheckBoxes else { return false }
-        if isMultiSelecting { return true }
-        if isHovered { return true }
-        return false
+        return isMultiSelecting
     }
 
     var body: some View {
@@ -1352,9 +1347,9 @@ private struct TableDoubleClickHandler: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSView, context: Context) {
         context.coordinator.handler = onDoubleClick
-        if context.coordinator.tableView == nil {
-            DispatchQueue.main.async {
-                if let tableView = findTableView(from: nsView) {
+        DispatchQueue.main.async {
+            if let tableView = findTableView(from: nsView) {
+                if tableView.doubleAction != #selector(Coordinator.onTableDoubleClick(_:)) {
                     context.coordinator.attach(to: tableView, handler: onDoubleClick)
                 }
             }

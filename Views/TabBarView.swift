@@ -39,8 +39,9 @@ struct TabBarView: View {
                     .help("Tab mới (⌘T)")
                     .padding(.leading, 2)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .padding(.leading, 78) // Chừa khoảng trống cho 3 nút điều khiển cửa sổ macOS (Traffic Lights)
+                .padding(.trailing, 8)
+                .padding(.vertical, 5)
             }
 
             Spacer(minLength: 8)

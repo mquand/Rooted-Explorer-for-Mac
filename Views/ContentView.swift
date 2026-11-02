@@ -62,10 +62,13 @@ struct ContentView: View {
                     viewModel: tab.leftViewModel,
                     columnVisibility: $columnVisibility
                 )
-                .overlay(
-                    Rectangle()
-                        .stroke(tab.activePane == .left ? Color.accentColor.opacity(0.4) : Color.clear, lineWidth: 2)
-                )
+                .overlay(alignment: .top) {
+                    if tab.activePane == .left {
+                        Rectangle()
+                            .fill(Color.accentColor)
+                            .frame(height: 2)
+                    }
+                }
 
                 Divider()
 
@@ -73,10 +76,13 @@ struct ContentView: View {
                     viewModel: rightVM,
                     columnVisibility: .constant(.detailOnly)
                 )
-                .overlay(
-                    Rectangle()
-                        .stroke(tab.activePane == .right ? Color.accentColor.opacity(0.4) : Color.clear, lineWidth: 2)
-                )
+                .overlay(alignment: .top) {
+                    if tab.activePane == .right {
+                        Rectangle()
+                            .fill(Color.accentColor)
+                            .frame(height: 2)
+                    }
+                }
             }
         } else {
             FileListView(
